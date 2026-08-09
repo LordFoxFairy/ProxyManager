@@ -20,20 +20,35 @@ export class Picker {
   /** Rotate after this many requests. 0 keeps a node until it fails. */
   rotateAfter = 0;
 
+  /** How long the candidate list may be reused, in ms. 0 disables caching. */
+  cacheMs = 1000;
+
   private current: Proxy | null = null;
   private served = 0;
   private cursor = 0;
   private cache: Proxy[] = [];
   private cachedAt = 0;
+  private cachedHttps: boolean | null = null;
 
-  /** Live candidates, refreshed at most once a second. */
+  /**
+   * Live candidates. Cached briefly so a burst of requests does not re-query
+   * per connection, but keyed on `httpsOnly` -- reusing an http-only list for
+   * an HTTPS request would hand back proxies that cannot do CONNECT.
+   */
   private candidates(httpsOnly: boolean): Proxy[] {
     const now = Date.now();
-    if (now - this.cachedAt > 1000) {
+    if (this.cachedHttps !== httpsOnly || now - this.cachedAt >= this.cacheMs) {
       this.cache = get({ n: 200, https: httpsOnly, minScore: 1 });
       this.cachedAt = now;
+      this.cachedHttps = httpsOnly;
     }
     return this.cache;
+  }
+
+  /** Force the next pick to re-read from the store. */
+  invalidate() {
+    this.cachedAt = 0;
+    this.cachedHttps = null;
   }
 
   /** Pick an upstream, excluding any that already failed for this request. */
@@ -81,7 +96,7 @@ export class Picker {
     recordResult(addr, ok, { delta: ok ? SCORE.reportOk : SCORE.reportFail });
     if (!ok) {
       if (this.current?.addr === addr) this.current = null;
-      this.cachedAt = 0; // a dead node must not linger in the cache
+      this.invalidate(); // a dead node must not linger in the cache
     }
   }
 

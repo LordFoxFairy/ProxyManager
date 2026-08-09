@@ -3,12 +3,15 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "bin": { "proxymanager": "./dist/cli.js" },
+  "bin": {
+    "proxymanager": "./dist/cli.js"
+  },
   "scripts": {
     "dev": "tsx src/cli.ts",
     "build": "tsc",
     "typecheck": "tsc --noEmit",
-    "start": "node dist/cli.js serve"
+    "start": "node dist/cli.js serve",
+    "test": "tsx --test src/**/*.test.ts"
   },
   "dependencies": {
     "better-sqlite3": "^11.7.0",

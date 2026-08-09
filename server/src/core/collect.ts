@@ -1,5 +1,5 @@
 import { SOURCES } from '../config.js';
-import { addCandidates } from './store.js';
+import { addCandidates, exhumeExpired, graveyardSize } from './store.js';
 
 /** Accepts `socks5://1.2.3.4:1080` and bare `1.2.3.4:1080`. */
 const LINE = /^(?:(https?|socks[45]):\/\/)?(\d{1,3}(?:\.\d{1,3}){3}):(\d{1,5})$/;
@@ -36,6 +36,10 @@ async function fetchSource(s: (typeof SOURCES)[number], log: (m: string) => void
 
 /** Pull every source in parallel, dedupe, insert. Returns count of new rows. */
 export async function collect(log: (m: string) => void = console.log) {
+  // Give long-buried addresses another chance before pulling fresh lists.
+  const revived = exhumeExpired();
+  if (revived) log(`  exhumed ${revived} expired tombstones`);
+
   const batches = await Promise.all(SOURCES.map((s) => fetchSource(s, log)));
 
   const seen = new Set<string>();
@@ -47,6 +51,6 @@ export async function collect(log: (m: string) => void = console.log) {
   }
 
   const added = rows.length ? addCandidates(rows) : 0;
-  log(`collected ${rows.length} unique, ${added} new`);
+  log(`collected ${rows.length} unique, ${added} new (${graveyardSize()} buried)`);
   return { unique: rows.length, added };
 }

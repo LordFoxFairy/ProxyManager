@@ -47,6 +47,20 @@ export function init(): Database.Database {
     );
     CREATE INDEX IF NOT EXISTS idx_live ON proxies(score DESC, latency_ms ASC);
     CREATE INDEX IF NOT EXISTS idx_due  ON proxies(checked_at);
+
+    -- Addresses proven dead. The free lists barely change between refreshes, so
+    -- without this the same ~70% of dead proxies is re-inserted and re-checked
+    -- every cycle, consuming most of the validation budget forever.
+    -- Expiry flips the active flag instead of deleting: the row carries the
+    -- death count that drives the backoff, so removing it would reset a
+    -- chronically dead host to a fresh 1h tombstone every time.
+    CREATE TABLE IF NOT EXISTS graveyard (
+      addr    TEXT PRIMARY KEY,
+      died_at INTEGER NOT NULL,
+      deaths  INTEGER NOT NULL DEFAULT 1,
+      active  INTEGER NOT NULL DEFAULT 1
+    );
+    CREATE INDEX IF NOT EXISTS idx_died ON graveyard(active, died_at);
   `);
   return db;
 }
@@ -55,15 +69,19 @@ const conn = () => db ?? init();
 
 export function addCandidates(rows: { addr: string; scheme: string; source: string }[]): number {
   const d = conn();
+  // Skip addresses still under a tombstone -- see purgeDead/exhumeExpired.
   const stmt = d.prepare(
     `INSERT OR IGNORE INTO proxies (addr, scheme, score, source, added_at)
-     VALUES (?, ?, ?, ?, ?)`,
+     SELECT ?, ?, ?, ?, ?
+     WHERE NOT EXISTS (SELECT 1 FROM graveyard g WHERE g.addr = ? AND g.active = 1)`,
   );
   const now = Date.now();
   // One transaction for ~5k inserts; individually this takes seconds.
   const run = d.transaction((items: typeof rows) => {
     let added = 0;
-    for (const r of items) added += stmt.run(r.addr, r.scheme, SCORE.init, r.source, now).changes;
+    for (const r of items) {
+      added += stmt.run(r.addr, r.scheme, SCORE.init, r.source, now, r.addr).changes;
+    }
     return added;
   });
   return run(rows);
@@ -161,9 +179,46 @@ export function get(q: Query = {}): Proxy[] {
 export const remove = (addr: string): number =>
   conn().prepare('DELETE FROM proxies WHERE addr = ?').run(addr).changes;
 
-/** Drop proxies that hit 0 after being checked at least once. */
-export const purgeDead = (): number =>
-  conn().prepare('DELETE FROM proxies WHERE score <= 0 AND checked_at IS NOT NULL').run().changes;
+/**
+ * Drop proxies that hit 0 after being checked, recording each in the graveyard
+ * so the next collect does not resurrect it immediately.
+ */
+export function purgeDead(): number {
+  const d = conn();
+  const run = d.transaction(() => {
+    d.prepare(
+      `INSERT INTO graveyard (addr, died_at, deaths, active)
+         SELECT addr, ?, 1, 1 FROM proxies WHERE score <= 0 AND checked_at IS NOT NULL
+       ON CONFLICT(addr) DO UPDATE
+         SET died_at = excluded.died_at, deaths = deaths + 1, active = 1`,
+    ).run(Date.now());
+    return d
+      .prepare('DELETE FROM proxies WHERE score <= 0 AND checked_at IS NOT NULL')
+      .run().changes;
+  });
+  return run();
+}
+
+/**
+ * Let long-buried addresses be retried. Free proxies do come back, so a
+ * tombstone is temporary -- but each additional death doubles the wait
+ * (1h, 2h, 4h... capped at 24h) so chronically dead hosts fade out.
+ */
+export function exhumeExpired(now = Date.now()): number {
+  return conn()
+    .prepare(
+      `UPDATE graveyard SET active = 0
+       WHERE active = 1
+         AND ? - died_at > MIN(3600000 * (1 << MIN(deaths - 1, 5)), 86400000)`,
+    )
+    .run(now).changes;
+}
+
+export const graveyardSize = (): number =>
+  (conn().prepare('SELECT COUNT(*) c FROM graveyard WHERE active = 1').get() as { c: number }).c;
+
+export const isBuried = (addr: string): boolean =>
+  conn().prepare('SELECT 1 FROM graveyard WHERE addr = ? AND active = 1').get(addr) !== undefined;
 
 export function stats() {
   const d = conn();
@@ -195,6 +250,7 @@ export function stats() {
     live: row.live ?? 0,
     liveHttps: row.live_https ?? 0,
     unchecked: row.unchecked ?? 0,
+    buried: graveyardSize(),
     avgLatency: row.avg_latency ? Math.round(row.avg_latency) : null,
     byScheme: groupBy('scheme'),
     byAnonymity: groupBy('anonymity'),
