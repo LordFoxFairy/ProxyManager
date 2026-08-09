@@ -2,6 +2,8 @@ import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { COLLECT_INTERVAL, RECHECK_INTERVAL, SCORE, VALIDATE_BATCH } from './config.js';
 import { collect } from './core/collect.js';
+import { gatewayStats, traffic } from './core/gateway.js';
+import { picker } from './core/picker.js';
 import * as store from './core/store.js';
 import { run as validate } from './core/validate.js';
 
@@ -74,6 +76,30 @@ app.get('/stats', (c) =>
 );
 
 app.get('/log', (c) => c.json({ lines: state.log }));
+
+/** Local forwarding proxy: status, recent traffic, and strategy controls. */
+app.get('/gateway', (c) =>
+  c.json({
+    ...gatewayStats,
+    strategy: picker.strategy,
+    tolerance: picker.tolerance,
+    rotateAfter: picker.rotateAfter,
+    active: picker.active ? `${picker.active.scheme}://${picker.active.addr}` : null,
+    traffic: traffic().slice(0, 30),
+  }),
+);
+
+app.post('/gateway/strategy', (c) => {
+  const s = c.req.query('strategy');
+  if (s && ['url-test', 'round-robin', 'random'].includes(s)) {
+    picker.strategy = s as typeof picker.strategy;
+  }
+  const tol = Number(c.req.query('tolerance'));
+  if (Number.isFinite(tol) && tol >= 0) picker.tolerance = tol;
+  const rot = Number(c.req.query('rotate_after'));
+  if (Number.isFinite(rot) && rot >= 0) picker.rotateAfter = rot;
+  return c.json({ strategy: picker.strategy, tolerance: picker.tolerance, rotateAfter: picker.rotateAfter });
+});
 
 /**
  * Consumer feedback. Passing a validator is not proof that real traffic works,

@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 import { serve } from '@hono/node-server';
-import { HOST, PORT, VALIDATE_BATCH } from './config.js';
+import { GATEWAY_PORT, HOST, PORT, VALIDATE_BATCH } from './config.js';
 import { app, startLoop } from './api.js';
 import { collect } from './core/collect.js';
+import { startGateway } from './core/gateway.js';
 import * as store from './core/store.js';
 import { run as validate } from './core/validate.js';
 
@@ -54,9 +55,20 @@ async function main() {
 
     case 'serve': {
       const port = flag(args, '--port', PORT);
+      const gwPort = flag(args, '--gateway-port', GATEWAY_PORT);
       startLoop();
       serve({ fetch: app.fetch, hostname: HOST, port });
       console.log(`ProxyManager API on http://${HOST}:${port}`);
+      if (!args.includes('--no-gateway')) {
+        startGateway(gwPort);
+        console.log(`  use it:  export https_proxy=http://127.0.0.1:${gwPort}`);
+      }
+      break;
+    }
+
+    case 'gateway': {
+      // Standalone gateway, for pointing a client at the pool without the API.
+      startGateway(flag(args, '--port', GATEWAY_PORT));
       break;
     }
 
@@ -67,7 +79,8 @@ async function main() {
   validate [-n 1500]   check pending proxies
   stats                pool statistics
   get [-n 10] [--https] [--scheme socks5] [--json]
-  serve [--port 8787]  run the HTTP API + background loop`);
+  serve [--port 8787] [--gateway-port 7890] [--no-gateway]
+  gateway [--port 7890]  只跑本地转发代理`);
   }
 }
 

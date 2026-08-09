@@ -75,3 +75,13 @@ export const VALIDATE_BATCH = num('PM_VALIDATE_BATCH', 1500);
 
 export const HOST = env('PM_HOST', '127.0.0.1');
 export const PORT = num('PM_PORT', 8787);
+
+/**
+ * Local forwarding proxy. Loopback only by design -- binding this to 0.0.0.0
+ * would publish an open proxy to the whole network.
+ *
+ * Deliberately not 7890: that is Clash/mihomo's default and collides on any
+ * machine already running one.
+ */
+export const GATEWAY_PORT = num('PM_GATEWAY_PORT', 7899);
+
