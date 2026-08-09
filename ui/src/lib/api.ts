@@ -48,6 +48,25 @@ export const getProxies = (q: { n?: number; scheme?: string; https?: boolean }) 
 
 export const getLog = () => req<{ lines: string[] }>('/log');
 
+export type Strategy = 'url-test' | 'round-robin' | 'random';
+
+export interface Gateway {
+  running: boolean;
+  port: number;
+  requests: number;
+  failed: number;
+  strategy: Strategy;
+  tolerance: number;
+  rotateAfter: number;
+  active: string | null;
+  traffic: { at: number; target: string; via: string | null; ms: number; ok: boolean }[];
+}
+
+export const getGateway = () => req<Gateway>('/gateway');
+
+export const setStrategy = (s: Strategy) =>
+  req<unknown>(`/gateway/strategy?strategy=${s}`, { method: 'POST' });
+
 export const refresh = (collect = true) =>
   req<{ started: boolean }>(`/refresh?collect=${collect}`, { method: 'POST' });
 

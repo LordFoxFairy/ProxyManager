@@ -8,6 +8,7 @@ import {
   Gauge,
   Globe,
   Layers,
+  Plug,
   Lock,
   Radio,
   RefreshCw,
@@ -18,37 +19,59 @@ import {
   Zap,
 } from 'lucide-react';
 import { Empty, Notice, Score, SchemeBadge, Stat, fmtAge } from './components/Pieces';
-import { getLog, getProxies, getStats, refresh, removeProxy, type Proxy, type Stats } from './lib/api';
+import {
+  getGateway,
+  getLog,
+  getProxies,
+  getStats,
+  refresh,
+  removeProxy,
+  setStrategy,
+  type Gateway,
+  type Proxy,
+  type Stats,
+  type Strategy,
+} from './lib/api';
 import './styles/base.css';
 import './styles/app.css';
 
-type Page = 'dashboard' | 'pool' | 'sources' | 'log';
+type Page = 'dashboard' | 'gateway' | 'pool' | 'sources' | 'log';
 
 const NAV: { id: Page; label: string; icon: typeof Gauge }[] = [
   { id: 'dashboard', label: '仪表盘', icon: Gauge },
+  { id: 'gateway', label: '本地代理', icon: Plug },
   { id: 'pool', label: '代理池', icon: Boxes },
   { id: 'sources', label: '采集源', icon: Layers },
   { id: 'log', label: '运行日志', icon: ScrollText },
 ];
 
+const STRATEGIES: { id: Strategy; label: string; hint: string }[] = [
+  { id: 'url-test', label: '最优节点', hint: '选最快的,带迟滞防抖动' },
+  { id: 'round-robin', label: '依次轮换', hint: '分摊请求,避免单 IP 触发风控' },
+  { id: 'random', label: '随机', hint: '每次随机挑一个' },
+];
+
 export default function App() {
   const [page, setPage] = useState<Page>('dashboard');
   const [stats, setStats] = useState<Stats | null>(null);
+  const [gw, setGw] = useState<Gateway | null>(null);
   const [proxies, setProxies] = useState<Proxy[]>([]);
   const [lines, setLines] = useState<string[]>([]);
   const [offline, setOffline] = useState(false);
   const [onlyHttps, setOnlyHttps] = useState(false);
   const [scheme, setScheme] = useState<string>('');
-  const [copied, setCopied] = useState<string | null>(null);
+  const [copied, setCopied] = useState<string>('');
 
   const load = useCallback(async () => {
     try {
-      const [s, p, l] = await Promise.all([
+      const [s, g, p, l] = await Promise.all([
         getStats(),
+        getGateway(),
         getProxies({ n: 200, https: onlyHttps, scheme: scheme || undefined }),
         getLog(),
       ]);
       setStats(s);
+      setGw(g);
       setProxies(p.proxies);
       setLines(l.lines);
       setOffline(false);
@@ -66,7 +89,7 @@ export default function App() {
   const copy = (url: string) => {
     void navigator.clipboard.writeText(url);
     setCopied(url);
-    setTimeout(() => setCopied((c) => (c === url ? null : c)), 1200);
+    setTimeout(() => setCopied((c) => (c === url ? '' : c)), 1200);
   };
 
   const drop = async (addr: string) => {
@@ -181,6 +204,112 @@ export default function App() {
               {Object.entries(stats.byScheme).map(([k, v]) => (
                 <Stat key={k} label={`协议 ${k}`} icon={<Globe size={13} />} value={v} />
               ))}
+            </div>
+          </>
+        )}
+
+        {page === 'gateway' && gw && (
+          <>
+            <div className="stat-grid">
+              <Stat
+                label="监听端口"
+                icon={<Plug size={13} />}
+                value={gw.running ? `:${gw.port}` : '未运行'}
+                tone={gw.running ? 'accent' : undefined}
+                sub={gw.running ? '仅监听 127.0.0.1' : '端口可能被占用'}
+              />
+              <Stat
+                label="已转发请求"
+                icon={<Activity size={13} />}
+                value={gw.requests}
+                sub={gw.failed ? `失败 ${gw.failed}` : '无失败'}
+                tone="good"
+              />
+              <Stat
+                label="当前节点"
+                icon={<Globe size={13} />}
+                value={
+                  <span style={{ fontSize: 15 }}>{gw.active?.split('//')[1] ?? '—'}</span>
+                }
+                sub={gw.active?.split('://')[0] ?? '尚未使用'}
+              />
+            </div>
+
+            <div className="card toolbar">
+              <code className="addr">export https_proxy=http://127.0.0.1:{gw.port}</code>
+              <span className="grow" />
+              <button
+                className="btn"
+                onClick={() => copy(`export https_proxy=http://127.0.0.1:${gw.port}`)}
+              >
+                {copied.startsWith('export') ? <Check size={15} /> : <Copy size={15} />}
+                复制
+              </button>
+            </div>
+
+            <div className="card toolbar">
+              <div className="chips">
+                {STRATEGIES.map((s) => (
+                  <button
+                    key={s.id}
+                    title={s.hint}
+                    className={`chip${gw.strategy === s.id ? ' active' : ''}`}
+                    onClick={() => setStrategy(s.id).then(load)}
+                  >
+                    {s.label}
+                  </button>
+                ))}
+              </div>
+              <span className="grow" />
+              <span className="muted">迟滞 {gw.tolerance}ms</span>
+            </div>
+
+            <Notice>
+              <strong>免费代理出口不可信</strong>
+              <br />
+              流量经由陌生的第三方服务器,可能被中间人窥探或篡改。请只用于抓取公开数据,
+              不要走登录态、支付或任何敏感请求。
+            </Notice>
+
+            <div className="card">
+              {gw.traffic.length === 0 ? (
+                <Empty
+                  icon={<Plug size={34} />}
+                  title="暂无请求"
+                  hint={`把流量指向 127.0.0.1:${gw.port} 后,这里会显示实时请求`}
+                />
+              ) : (
+                <div className="table-wrap">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>时间</th>
+                        <th>目标</th>
+                        <th>经由</th>
+                        <th>耗时</th>
+                        <th>结果</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {gw.traffic.map((t, i) => (
+                        <tr key={`${t.at}-${i}`}>
+                          <td className="mono muted">
+                            {new Date(t.at).toLocaleTimeString('zh-CN', { hour12: false })}
+                          </td>
+                          <td className="addr">{t.target}</td>
+                          <td className="mono muted">{t.via?.split('//')[1] ?? '—'}</td>
+                          <td className="mono">{t.ms}ms</td>
+                          <td>
+                            <span className={`badge ${t.ok ? 'badge-yes' : 'badge-no'}`}>
+                              {t.ok ? '成功' : '失败'}
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
           </>
         )}
