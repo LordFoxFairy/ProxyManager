@@ -183,7 +183,15 @@ export default function App() {
                 label="待校验"
                 icon={<Database size={13} />}
                 value={stats.unchecked.toLocaleString()}
-                sub={stats.lastRun ? `上次 ${fmtAge(stats.lastRun)}` : '尚未运行'}
+                sub={
+                  busy
+                    ? stats.phase === 'collecting'
+                      ? '正在采集…'
+                      : '正在校验…'
+                    : stats.lastRun
+                      ? `上次 ${fmtAge(stats.lastRun)}`
+                      : '尚未运行'
+                }
               />
             </div>
 
@@ -216,6 +224,21 @@ export default function App() {
                 <Stat key={k} label={`协议 ${k}`} icon={<Globe size={13} />} value={v} />
               ))}
             </div>
+
+            {gw?.running && (
+              <div className="card toolbar" style={{ marginTop: 20 }}>
+                <Plug size={16} className="muted" />
+                <span>
+                  本地代理运行中 ·{' '}
+                  <code className="addr">http://127.0.0.1:{gw.port}</code> ·{' '}
+                  已转发 {gw.requests} 个请求
+                </span>
+                <span className="grow" />
+                <button className="btn" onClick={() => setPage('gateway')}>
+                  查看详情
+                </button>
+              </div>
+            )}
           </>
         )}
 
