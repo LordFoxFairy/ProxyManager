@@ -155,6 +155,15 @@ async function handleConnect(client: net.Socket, hostPort: string, head: Buffer)
   const t0 = Date.now();
   gatewayStats.requests++;
 
+  // Answer 502 while we still can. Once the tunnel is acknowledged there is no
+  // way to report an HTTP error, and the client would see a bare closed socket.
+  if (!picker.hasCandidates(true)) {
+    gatewayStats.failed++;
+    note({ at: Date.now(), target: hostPort, via: null, ms: Date.now() - t0, ok: false });
+    client.end('HTTP/1.1 502 Bad Gateway\r\n\r\nno usable proxy in pool\r\n');
+    return;
+  }
+
   // The client sends its ClientHello only after we acknowledge the tunnel, so
   // acknowledge first and buffer what arrives while we shop for an upstream.
   client.write('HTTP/1.1 200 Connection Established\r\n\r\n');

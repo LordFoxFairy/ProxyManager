@@ -133,9 +133,20 @@ export default function App() {
 
         {offline && (
           <Notice danger>
-            <strong>无法连接后端服务。</strong>
+            <strong>无法连接后端服务</strong>
             <br />
-            请先启动:<code> cd server &amp;&amp; npm run dev serve</code>
+            开发模式请先启动:<code> cd server &amp;&amp; npm run dev serve</code>
+            <br />
+            打包版本依赖系统已安装 Node.js —— 请确认 <code>node -v</code> 可用。
+          </Notice>
+        )}
+
+        {!offline && gw && !gw.running && (
+          <Notice danger>
+            <strong>本地代理端口未能启动</strong>
+            <br />
+            端口可能被占用(Clash/mihomo 默认使用 7890)。设置
+            <code> PM_GATEWAY_PORT</code> 换一个端口后重启。
           </Notice>
         )}
 

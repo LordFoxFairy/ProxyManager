@@ -11,7 +11,8 @@
     "build": "tsc",
     "typecheck": "tsc --noEmit",
     "start": "node dist/cli.js serve",
-    "test": "tsx --test src/**/*.test.ts"
+    "test": "tsx --test src/**/*.test.ts",
+    "bundle": "node scripts/bundle.mjs"
   },
   "dependencies": {
     "better-sqlite3": "^11.7.0",

@@ -51,6 +51,11 @@ export class Picker {
     this.cachedHttps = null;
   }
 
+  /** Whether any candidate exists, without advancing rotation state. */
+  hasCandidates(httpsOnly: boolean): boolean {
+    return this.candidates(httpsOnly).length > 0;
+  }
+
   /** Pick an upstream, excluding any that already failed for this request. */
   pick(httpsOnly: boolean, exclude: Set<string> = new Set()): Proxy | null {
     const pool = this.candidates(httpsOnly).filter((p) => !exclude.has(p.addr));
