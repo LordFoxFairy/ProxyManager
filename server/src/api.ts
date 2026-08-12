@@ -23,6 +23,7 @@ import {
   renderBrowserDiagnosticPage,
 } from './core/browser-diagnostics.js';
 import { lookupIpProfile } from './core/ip-profile.js';
+import { getRuntimeConfig, getRuntimeStatus, setRuntimeKind, updateRuntimeConfig } from './core/runtime.js';
 import { gatewayStats, traffic } from './core/gateway.js';
 import { picker } from './core/picker.js';
 import {
@@ -75,6 +76,16 @@ export const app = new Hono();
 app.use('*', cors());
 
 app.get('/health', (c) => c.json({ ok: true }));
+
+app.get('/runtime', (c) => c.json({ status: getRuntimeStatus(), config: getRuntimeConfig() }));
+app.patch('/runtime', async (c) => {
+  let body: unknown = {};
+  try { body = await c.req.json(); } catch { /* return current state */ }
+  const patch = body && typeof body === 'object' ? body as Record<string, unknown> : {};
+  if (patch.kind !== undefined) setRuntimeKind(patch.kind);
+  const config = updateRuntimeConfig(patch);
+  return c.json({ status: getRuntimeStatus(), config });
+});
 
 app.post('/diagnostics/browser/session', (c) => {
   const session = createBrowserDiagnosticSession();

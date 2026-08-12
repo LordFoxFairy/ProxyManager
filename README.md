@@ -18,7 +18,7 @@ npm run dev collect          # 采集候选(约 5,900 个)
 npm run dev validate -n 700  # 校验
 npm run dev get -n 10 --https
 npm run dev serve            # API :8787 + 本地代理 :7899
-npm test                     # 40 个单元测试
+npm test                     # 42 个单元测试
 
 # 桌面应用(会自动拉起后端)
 cd ui && npm install && npm run tauri dev
@@ -202,6 +202,9 @@ HTTPS CONNECT 隧道;socks5 约 **51%**。真实业务流量绝大多数是 HTTP
 [SUPER_CLASH_VERGE_PLAN.md](SUPER_CLASH_VERGE_PLAN.md)。
 
 界面采用固定浅色主题和高密度运维布局，按工作对象分为六页：
+
+路由页已接入 Runtime 状态面板，可区分内置网关与 Mihomo、规则/全局/直连模式、配置版本、
+系统代理和 TUN 能力；Mihomo 未配置时会明确显示降级原因。
 
 | 页面 | 职责 |
 |---|---|

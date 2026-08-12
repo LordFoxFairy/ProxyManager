@@ -19,6 +19,8 @@ import {
   createBrowserDiagnosticSession,
   getBrowserDiagnosticStatus,
   getIpProfile,
+  getRuntime,
+  updateRuntime,
   getProxies,
   getProxyConnectivity,
   getStats,
@@ -35,6 +37,8 @@ import {
   type Gateway,
   type Proxy,
   type Stats,
+  type RuntimeConfig,
+  type RuntimeStatus,
 } from '../lib/api';
 import { invoke } from '@tauri-apps/api/core';
 import type { SelectOption } from '../components/SelectMenu';
@@ -56,6 +60,8 @@ function useProxyManagerState() {
   const [resourceView, setResourceView] = useState<ResourceView>('nodes');
   const [stats, setStats] = useState<Stats | null>(null);
   const [gateway, setGateway] = useState<Gateway | null>(null);
+  const [runtimeStatus, setRuntimeStatus] = useState<RuntimeStatus | null>(null);
+  const [runtimeConfig, setRuntimeConfig] = useState<RuntimeConfig | null>(null);
   const [control, setControl] = useState<ControlState | null>(null);
   const [automationDraft, setAutomationDraft] = useState<AutomationSettings | null>(null);
   const [controlSaving, setControlSaving] = useState(false);
@@ -105,7 +111,7 @@ function useProxyManagerState() {
 
   const load = useCallback(async () => {
     try {
-      const [nextStats, nextGateway, proxyResult, logResult, nextControl] = await Promise.all([
+      const [nextStats, nextGateway, proxyResult, logResult, nextControl, nextRuntime] = await Promise.all([
         getStats(),
         getGateway(),
         getProxies({
@@ -121,9 +127,12 @@ function useProxyManagerState() {
         }),
         getLog(),
         getControl(),
+        getRuntime(),
       ]);
       setStats(nextStats);
       setGateway(nextGateway);
+      setRuntimeStatus(nextRuntime.status);
+      setRuntimeConfig(nextRuntime.config);
       setProxies(proxyResult.proxies);
       setProxyTotal(proxyResult.total);
       setProxyPage(proxyResult.page);
@@ -415,6 +424,12 @@ function useProxyManagerState() {
     }
   };
 
+  const saveRuntime = async (patch: Partial<RuntimeConfig> & { kind?: 'builtin' | 'mihomo' }) => {
+    const next = await updateRuntime(patch);
+    setRuntimeStatus(next.status);
+    setRuntimeConfig(next.config);
+  };
+
   const resetProxyFilters = () => {
     setScheme('');
     setOnlyHttps(false);
@@ -507,7 +522,7 @@ function useProxyManagerState() {
   }, [toast]);
 
   return {
-    page, setPage, resourceView, setResourceView, stats, gateway, control, automationDraft, setAutomationDraft, controlSaving,
+    page, setPage, resourceView, setResourceView, stats, gateway, runtimeStatus, runtimeConfig, saveRuntime, control, automationDraft, setAutomationDraft, controlSaving,
     controlError, proxies, proxyTotal, proxyPage, setProxyPage, proxyPageSize, setProxyPageSize,
     proxyTotalPages, country, setCountry, anonymity, setAnonymity, minScore, setMinScore,
     targetFilter, setTargetFilter, proxySearch, setProxySearch, selectedProxy, setSelectedProxy,

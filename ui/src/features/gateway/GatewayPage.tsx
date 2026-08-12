@@ -1,7 +1,7 @@
 import { Activity, Check, Copy, Globe, Network, Plug, Radar } from 'lucide-react';
 import { Stat } from '../../components/Pieces';
 import { SelectMenu, type SelectOption } from '../../components/SelectMenu';
-import { setStrategy, type Gateway, type Strategy } from '../../lib/api';
+import { setStrategy, type Gateway, type RuntimeConfig, type RuntimeStatus, type Strategy } from '../../lib/api';
 
 const STRATEGIES: { id: Strategy; label: string; hint: string }[] = [
   { id: 'url-test', label: '最优节点', hint: '选择低延迟节点，并以迟滞值抑制频繁切换' },
@@ -11,6 +11,9 @@ const STRATEGIES: { id: Strategy; label: string; hint: string }[] = [
 
 export function GatewayPage({
   gateway,
+  runtimeStatus,
+  runtimeConfig,
+  onSaveRuntime,
   copied,
   routingSaving,
   routingError,
@@ -21,6 +24,9 @@ export function GatewayPage({
   onReload,
 }: {
   gateway: Gateway;
+  runtimeStatus: RuntimeStatus;
+  runtimeConfig: RuntimeConfig;
+  onSaveRuntime: (patch: Partial<RuntimeConfig> & { kind?: 'builtin' | 'mihomo' }) => Promise<void>;
   copied: string;
   routingSaving: boolean;
   routingError: string;
@@ -31,6 +37,7 @@ export function GatewayPage({
   onReload: () => Promise<void>;
 }) {
   const envCommand = `export https_proxy=http://127.0.0.1:${gateway.port}`;
+  const toggleRuntime = (key: 'systemProxy' | 'tun') => void onSaveRuntime({ [key]: !runtimeConfig[key] });
   return (
     <>
       <div className="stat-grid">
@@ -58,6 +65,20 @@ export function GatewayPage({
           {copied.startsWith('export') ? <Check size={15} /> : <Copy size={15} />}复制
         </button>
       </div>
+
+      <section className="runtime-control-panel">
+        <div className="runtime-control-head">
+          <div><strong>运行时</strong><span>{runtimeStatus.kind === 'mihomo' ? 'Mihomo sidecar' : '内置代理池网关'} · 配置 v{runtimeStatus.configVersion}</span></div>
+          <span className={`runtime-pill${runtimeStatus.lifecycle === 'running' ? ' online' : ''}`}>{runtimeStatus.lifecycle === 'running' ? '运行中' : runtimeStatus.lifecycle === 'degraded' ? '能力不完整' : runtimeStatus.lifecycle}</span>
+        </div>
+        <div className="runtime-control-grid">
+          <label><span>运行时内核</span><select value={runtimeStatus.kind} onChange={(event) => void onSaveRuntime({ kind: event.target.value as 'builtin' | 'mihomo' })}><option value="builtin">内置网关</option><option value="mihomo">Mihomo</option></select></label>
+          <label><span>工作模式</span><select value={runtimeConfig.mode} onChange={(event) => void onSaveRuntime({ mode: event.target.value as RuntimeConfig['mode'] })}><option value="rule">规则模式</option><option value="global">全局模式</option><option value="direct">直连模式</option></select></label>
+          <button className={`runtime-toggle ${runtimeConfig.systemProxy ? 'active' : ''}`} disabled={!runtimeStatus.capabilities.systemProxy} onClick={() => toggleRuntime('systemProxy')}><strong>系统代理</strong><span>{runtimeStatus.systemProxy === 'unsupported' ? '需 Mihomo' : runtimeConfig.systemProxy ? '已开启' : '已关闭'}</span></button>
+          <button className={`runtime-toggle ${runtimeConfig.tun ? 'active' : ''}`} disabled={!runtimeStatus.capabilities.tun} onClick={() => toggleRuntime('tun')}><strong>TUN 模式</strong><span>{runtimeStatus.tun === 'unsupported' ? '需 Mihomo + 系统权限' : runtimeConfig.tun ? '已开启' : '已关闭'}</span></button>
+        </div>
+        {runtimeStatus.lastError && <div className="runtime-control-error">{runtimeStatus.lastError}</div>}
+      </section>
 
       <section className={`gateway-routing${routingSaving ? ' saving' : ''}`}>
         <div className="gateway-routing-title">

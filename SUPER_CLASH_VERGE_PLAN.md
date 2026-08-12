@@ -250,12 +250,14 @@ Provider  订阅、固定节点、ISP、住宅、公共池
 - 目标服务能力和路由策略。
 - 浏览器诊断会话和 IP 画像。
 
-### Phase 1：Runtime 基础
+### Phase 1：Runtime 基础（进行中）
 
-- Mihomo sidecar 生命周期管理。
-- 配置生成、校验、版本和回滚。
-- 本地 HTTP/SOCKS/Mixed 端口状态。
-- 系统代理开关和托盘状态。
+- RuntimeAdapter 状态、配置和版本契约。
+- 内置网关与 Mihomo sidecar 双运行时状态。
+- 配置模式、端口、系统代理/TUN 能力状态 API。
+- Mihomo 未配置时显示降级状态，不伪装成已接管。
+
+下一小步：Mihomo sidecar 生命周期管理、配置生成/校验/回滚，以及真实系统代理开关。
 
 验收：系统浏览器通过 ProxyManager 出口访问，关闭应用后系统代理恢复原状态。
 

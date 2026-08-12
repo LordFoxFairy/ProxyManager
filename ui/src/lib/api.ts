@@ -134,6 +134,33 @@ export interface Gateway {
   traffic: { at: number; target: string; via: string | null; ms: number; ok: boolean }[];
 }
 
+export interface RuntimeConfig {
+  mode: 'rule' | 'global' | 'direct';
+  mixedPort: number;
+  httpPort: number;
+  socksPort: number;
+  systemProxy: boolean;
+  tun: boolean;
+  dns: boolean;
+}
+
+export interface RuntimeStatus {
+  kind: 'builtin' | 'mihomo';
+  lifecycle: 'stopped' | 'running' | 'degraded' | 'error';
+  version: string | null;
+  controller: string | null;
+  configVersion: number;
+  configValid: boolean;
+  systemProxy: 'on' | 'off' | 'unsupported';
+  tun: 'on' | 'off' | 'unsupported';
+  capabilities: { systemProxy: boolean; tun: boolean; mihomo: boolean };
+  lastError: string | null;
+}
+
+export const getRuntime = () => req<{ status: RuntimeStatus; config: RuntimeConfig }>('/runtime');
+export const updateRuntime = (patch: Partial<RuntimeConfig> & { kind?: 'builtin' | 'mihomo' }) =>
+  req<{ status: RuntimeStatus; config: RuntimeConfig }>('/runtime', { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify(patch) });
+
 export interface AutomationSettings {
   enabled: boolean;
   autoPurgeEnabled: boolean;
