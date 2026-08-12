@@ -16,7 +16,7 @@ function seed(addr: string, latencyMs: number, score = 50) {
   store.addCandidates([{ addr, scheme: 'socks5', source: 'test' }]);
   store.recordResult(addr, true, { https: 1, latencyMs });
   // recordResult adds SCORE.ok; nudge to the caller's target score.
-  const cur = store.get({ minScore: 0 }).find((p) => p.addr === addr)!.score;
+  const cur = store.find(addr)!.score;
   if (score !== cur) store.recordResult(addr, true, { delta: score - cur });
 }
 
@@ -81,4 +81,31 @@ test('https-only never returns a non-CONNECT proxy', () => {
   for (let i = 0; i < 5; i++) {
     assert.notEqual(p.pick(true)?.addr, '10.0.9.9:1080');
   }
+});
+
+test('country filters constrain the candidate pool', () => {
+  seed('10.0.8.1:1080', 40, 100);
+  store.recordResult('10.0.8.1:1080', true, { country: 'DE' });
+  seed('10.0.8.2:1080', 10, 100);
+  store.recordResult('10.0.8.2:1080', true, { country: 'US' });
+  const p = new Picker();
+  p.cacheMs = 0;
+  assert.equal(p.pick(true, new Set(), { country: 'DE' })?.addr, '10.0.8.1:1080');
+});
+
+test('target routing prefers learned proxies and falls back while learning', () => {
+  seed('10.0.7.1:1080', 90, 100);
+  store.recordResult('10.0.7.1:1080', true, { country: 'FR' });
+  store.recordConnectivity('10.0.7.1:1080', [{
+    id: 'openai',
+    name: 'OpenAI API',
+    url: 'https://api.openai.com/v1/models',
+    available: true,
+    latencyMs: 90,
+    statusCode: 401,
+  }]);
+  const p = new Picker();
+  p.cacheMs = 0;
+  assert.equal(p.pick(true, new Set(), { country: 'FR', target: 'openai' })?.addr, '10.0.7.1:1080');
+  assert.ok(p.pick(true, new Set(), { country: 'FR', target: 'not-learned' }));
 });

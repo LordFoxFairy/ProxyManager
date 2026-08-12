@@ -2,6 +2,17 @@ use std::process::{Child, Command, Stdio};
 use std::sync::Mutex;
 use tauri::Manager;
 
+#[tauri::command]
+fn open_external_url(url: String) -> Result<(), String> {
+    #[cfg(target_os = "macos")]
+    let result = Command::new("open").arg(&url).spawn();
+    #[cfg(target_os = "windows")]
+    let result = Command::new("cmd").args(["/C", "start", "", &url]).spawn();
+    #[cfg(target_os = "linux")]
+    let result = Command::new("xdg-open").arg(&url).spawn();
+    result.map(|_| ()).map_err(|error| error.to_string())
+}
+
 /// Handle to the Node backend so it can be killed when the window closes.
 /// Without this the server survives the UI and holds the port.
 struct Backend(Mutex<Option<Child>>);
@@ -41,6 +52,7 @@ fn spawn_backend(app: &tauri::AppHandle) -> Option<Child> {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .invoke_handler(tauri::generate_handler![open_external_url])
         .manage(Backend(Mutex::new(None)))
         .setup(|app| {
             if cfg!(debug_assertions) {

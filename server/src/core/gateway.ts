@@ -3,7 +3,8 @@ import net from 'node:net';
 import { SocksProxyAgent } from 'socks-proxy-agent';
 import { HttpsProxyAgent } from 'https-proxy-agent';
 import { picker } from './picker.js';
-import type { Proxy } from './store.js';
+import { resolveGatewayRoute, type ResolvedGatewayRoute } from './routing.js';
+import { recordConnectivity, type Proxy } from './store.js';
 
 /**
  * A local HTTP proxy that forwards through the pool.
@@ -63,6 +64,22 @@ const agentFor = (p: Proxy) =>
   p.scheme === 'http'
     ? new HttpsProxyAgent(`http://${p.addr}`)
     : new SocksProxyAgent(`${p.scheme}://${p.addr}`);
+
+const routeFilters = (route: ResolvedGatewayRoute) => ({
+  country: route.country ?? undefined,
+  target: route.profile?.target.id,
+});
+
+const recordRouteSuccess = (proxy: Proxy, route: ResolvedGatewayRoute, latencyMs: number) => {
+  if (!route.profile) return;
+  recordConnectivity(proxy.addr, [{
+    ...route.profile.target,
+    available: true,
+    latencyMs,
+    statusCode: null,
+  }]);
+  picker.invalidate();
+};
 
 /**
  * Open a raw TCP tunnel to `host:port` through the upstream.
@@ -153,11 +170,13 @@ async function handleConnect(client: net.Socket, hostPort: string, head: Buffer)
   const port = Number(portStr ?? 443);
   const tried = new Set<string>();
   const t0 = Date.now();
+  const route = resolveGatewayRoute(host!);
+  const filters = routeFilters(route);
   gatewayStats.requests++;
 
   // Answer 502 while we still can. Once the tunnel is acknowledged there is no
   // way to report an HTTP error, and the client would see a bare closed socket.
-  if (!picker.hasCandidates(true)) {
+  if (!picker.hasCandidates(true, filters)) {
     gatewayStats.failed++;
     note({ at: Date.now(), target: hostPort, via: null, ms: Date.now() - t0, ok: false });
     client.end('HTTP/1.1 502 Bad Gateway\r\n\r\nno usable proxy in pool\r\n');
@@ -175,7 +194,7 @@ async function handleConnect(client: net.Socket, hostPort: string, head: Buffer)
 
   for (let i = 0; i < MAX_ATTEMPTS; i++) {
     // HTTPS needs an upstream that survives CONNECT -- socks4 almost never does.
-    const p = picker.pick(true, tried);
+    const p = picker.pick(true, tried, filters);
     if (!p) break;
     tried.add(p.addr);
 
@@ -194,6 +213,7 @@ async function handleConnect(client: net.Socket, hostPort: string, head: Buffer)
       }
 
       picker.report(p.addr, true);
+      recordRouteSuccess(p, route, Date.now() - t0);
       note({
         at: Date.now(), target: hostPort,
         via: `${p.scheme}://${p.addr}`, ms: Date.now() - t0, ok: true,
@@ -219,12 +239,25 @@ function handlePlain(req: http.IncomingMessage, res: http.ServerResponse) {
   const tried = new Set<string>();
   const t0 = Date.now();
   gatewayStats.requests++;
+  let targetUrl: URL;
+  try {
+    targetUrl = new URL(req.url ?? '');
+    if (targetUrl.protocol !== 'http:') throw new Error('unsupported protocol');
+  } catch {
+    gatewayStats.failed++;
+    note({ at: Date.now(), target: req.url ?? '?', via: null, ms: Date.now() - t0, ok: false });
+    res.writeHead(400, { 'content-type': 'text/plain; charset=utf-8' });
+    res.end('absolute http URL required\n');
+    return;
+  }
+  const route = resolveGatewayRoute(targetUrl.hostname);
+  const filters = routeFilters(route);
 
   const attempt = (n: number): void => {
-    const p = picker.pick(false, tried);
+    const p = picker.pick(false, tried, filters);
     if (!p || n >= MAX_ATTEMPTS) {
       gatewayStats.failed++;
-      note({ at: Date.now(), target: req.url ?? '?', via: null, ms: Date.now() - t0, ok: false });
+      note({ at: Date.now(), target: targetUrl.toString(), via: null, ms: Date.now() - t0, ok: false });
       if (!res.headersSent) res.writeHead(502);
       res.end('proxy pool exhausted');
       return;
@@ -232,7 +265,7 @@ function handlePlain(req: http.IncomingMessage, res: http.ServerResponse) {
     tried.add(p.addr);
 
     const up = http.request(
-      req.url!,
+      targetUrl,
       {
         method: req.method,
         headers: req.headers,
@@ -252,7 +285,8 @@ function handlePlain(req: http.IncomingMessage, res: http.ServerResponse) {
           return;
         }
         picker.report(p.addr, true);
-        note({ at: Date.now(), target: req.url ?? '?', via: `${p.scheme}://${p.addr}`, ms: Date.now() - t0, ok: true });
+        recordRouteSuccess(p, route, Date.now() - t0);
+        note({ at: Date.now(), target: targetUrl.toString(), via: `${p.scheme}://${p.addr}`, ms: Date.now() - t0, ok: true });
         res.writeHead(code || 502, upRes.headers);
         upRes.pipe(res);
       },

@@ -25,3 +25,7 @@ target/
 # staged production server bundle
 bundle/
 *.tsbuildinfo
+
+# local browser verification artifacts
+.playwright-cli/
+output/

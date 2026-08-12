@@ -1,5 +1,6 @@
 import http from 'node:http';
 import https from 'node:https';
+import net from 'node:net';
 import { SocksProxyAgent } from 'socks-proxy-agent';
 import { HttpsProxyAgent } from 'https-proxy-agent';
 import {
@@ -8,8 +9,12 @@ import {
   ECHO_ENDPOINTS,
   GEO_BATCH_URL,
   HTTPS_CHECK_URL,
+  TCP_CHECK_TIMEOUT,
+  TCP_CONCURRENCY,
 } from '../config.js';
+import { getAutomationSettings } from './control.js';
 import { type Anonymity, type Scheme, pending, purgeDead, recordResult } from './store.js';
+import type { ValidationProgress } from '../contracts/jobs.js';
 
 /** Headers that leak the client, or announce that a proxy is in the path. */
 const LEAK_HEADERS = ['x-forwarded-for', 'x-real-ip', 'client-ip', 'forwarded'];
@@ -232,37 +237,120 @@ async function pool<T>(items: T[], limit: number, worker: (item: T) => Promise<v
   await Promise.all(runners);
 }
 
-export async function run(limit: number, log: (m: string) => void = console.log) {
+export async function tcpProbe(addr: string, timeout = TCP_CHECK_TIMEOUT): Promise<boolean> {
+  const separator = addr.lastIndexOf(':');
+  const host = addr.slice(0, separator);
+  const port = Number(addr.slice(separator + 1));
+  if (!host || !Number.isInteger(port) || port < 1 || port > 65535) return false;
+
+  return new Promise((resolve) => {
+    const socket = net.createConnection({ host, port });
+    let settled = false;
+    const done = (reachable: boolean) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(deadline);
+      socket.destroy();
+      resolve(reachable);
+    };
+    const deadline = setTimeout(() => done(false), timeout);
+    socket.once('connect', () => done(true));
+    socket.once('error', () => done(false));
+  });
+}
+
+/**
+ * A healthy public pool does not go from hundreds of proven nodes to zero in
+ * one pass. Treat that shape as a validator/upstream outage before mutating
+ * scores, otherwise a transient echo-path failure can erase the whole pool.
+ */
+export function isCatastrophicValidationFailure(checked: number, passed: number): boolean {
+  if (checked < 50) return false;
+  if (passed === 0) return true;
+  return checked >= 500 && passed / checked < 0.005;
+}
+
+export async function run(
+  limit: number,
+  log: (m: string) => void = console.log,
+  onProgress: (progress: ValidationProgress) => void = () => {},
+) {
   const targets = pending(limit);
   if (!targets.length) {
     log('nothing to check');
     return { checked: 0, passed: 0, purged: 0 };
   }
 
-  const echo = await probeEcho(log);
-  let passed = 0;
-  const results = new Map<string, CheckResult>();
+  let reachable = 0;
+  let tcpCompleted = 0;
+  const reachableTargets: typeof targets = [];
+  onProgress({ stage: 'tcp', total: targets.length, completed: 0, reachable: 0, passed: 0 });
+  await pool(targets, TCP_CONCURRENCY, async (target) => {
+    if (await tcpProbe(target.addr)) {
+      reachable++;
+      reachableTargets.push(target);
+    }
+    tcpCompleted++;
+    onProgress({
+      stage: 'tcp',
+      total: targets.length,
+      completed: tcpCompleted,
+      reachable,
+      passed: 0,
+    });
+  });
+  log(`tcp probe ${reachable}/${targets.length} reachable`);
 
-  await pool(targets, CONCURRENCY, async (t) => {
-    const r = await checkOne(t.scheme, t.addr, echo);
+  const echo = reachableTargets.length ? await probeEcho(log) : null;
+  let passed = 0;
+  let proxyCompleted = 0;
+  const results = new Map<string, CheckResult>();
+  for (const target of targets) results.set(target.addr, { ok: false });
+
+  onProgress({
+    stage: 'proxy',
+    total: reachableTargets.length,
+    completed: 0,
+    reachable,
+    passed,
+  });
+  await pool(reachableTargets, CONCURRENCY, async (t) => {
+    const r = await checkOne(t.scheme, t.addr, echo!);
     results.set(t.addr, r);
     if (r.ok) passed++;
+    proxyCompleted++;
+    onProgress({
+      stage: 'proxy',
+      total: reachableTargets.length,
+      completed: proxyCompleted,
+      reachable,
+      passed,
+    });
   });
+
+  if (isCatastrophicValidationFailure(targets.length, passed)) {
+    const rate = ((passed / targets.length) * 100).toFixed(1);
+    log(`validation circuit breaker: ${passed}/${targets.length} passed (${rate}%); pool unchanged`);
+    throw new Error('validation circuit breaker: abnormal bulk failure; pool unchanged');
+  }
 
   // Geo only for survivors -- looking up dead proxies wastes the rate limit.
   const liveIps = [...results.values()].filter((r) => r.ok && r.exitIp).map((r) => r.exitIp!);
+  onProgress({ stage: 'geo', total: liveIps.length, completed: 0, reachable, passed });
   const geo = liveIps.length ? await geoLookup([...new Set(liveIps)]) : new Map();
+  onProgress({ stage: 'geo', total: liveIps.length, completed: liveIps.length, reachable, passed });
 
   for (const [addr, r] of results) {
     recordResult(addr, r.ok, {
       anonymity: r.anonymity ?? null,
       latencyMs: r.latencyMs ?? null,
       https: r.https ?? null,
+      exitIp: r.exitIp ?? null,
       country: r.exitIp ? (geo.get(r.exitIp) ?? null) : null,
     });
   }
 
-  const purged = purgeDead();
+  const purged = getAutomationSettings().autoPurgeEnabled ? purgeDead() : 0;
   log(
     `checked ${targets.length}, passed ${passed} ` +
       `(${((passed / targets.length) * 100).toFixed(1)}%), purged ${purged}`,

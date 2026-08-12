@@ -10,6 +10,9 @@ process.env.PM_DB = join(mkdtempSync(join(tmpdir(), 'pm-test-')), 'test.db');
 
 const store = await import('./store.js');
 const { SCORE } = await import('../config.js');
+const control = await import('./control.js');
+const sourceControl = await import('./collect.js');
+const routing = await import('./routing.js');
 
 store.init();
 
@@ -103,4 +106,75 @@ test('pending prioritises never-checked proxies over checked ones', () => {
   const checked = due.indexOf('6.6.6.6:1080'); // validated in an earlier test
   assert.ok(unchecked >= 0, 'new proxy must be queued for checking');
   assert.ok(checked === -1 || unchecked < checked, 'never-checked must come first');
+});
+
+test('stores the observed exit IP with a validated proxy', () => {
+  add('10.10.10.10:1080');
+  store.recordResult('10.10.10.10:1080', true, { exitIp: '203.0.113.9', https: 1 });
+  assert.equal(store.find('10.10.10.10:1080')?.exit_ip, '203.0.113.9');
+});
+
+test('automation settings persist and clamp unsafe ranges', () => {
+  const settings = control.updateAutomationSettings({
+    enabled: false,
+    autoPurgeEnabled: false,
+    collectIntervalMinutes: 1,
+    recheckIntervalMinutes: 999,
+    validateBatch: 10,
+  });
+  assert.deepEqual(settings, {
+    enabled: false,
+    autoPurgeEnabled: false,
+    collectIntervalMinutes: 5,
+    recheckIntervalMinutes: 120,
+    validateBatch: 50,
+  });
+  assert.deepEqual(control.getAutomationSettings(), settings);
+});
+
+test('collection source enablement persists', () => {
+  const initial = sourceControl.sourceStatuses();
+  assert.equal(initial.length, 23);
+  assert.equal(initial.filter((source) => source.enabled).length, 7);
+  assert.ok(initial.filter((source) => source.recommended).every((source) => source.enabled));
+  assert.ok(sourceControl.setSourceEnabled('proxifly', false));
+  assert.equal(sourceControl.sourceStatuses().find((source) => source.name === 'proxifly')?.enabled, false);
+  assert.ok(sourceControl.setSourceEnabled('proxifly', true));
+  assert.equal(sourceControl.sourceStatuses().find((source) => source.name === 'proxifly')?.enabled, true);
+});
+
+test('gateway usage and country routing persist', () => {
+  assert.deepEqual(routing.updateGatewayRouting({ profile: 'openai', country: 'US' }), {
+    profile: 'openai',
+    country: 'US',
+  });
+  assert.deepEqual(routing.getGatewayRouting(), { profile: 'openai', country: 'US' });
+  assert.deepEqual(routing.updateGatewayRouting({ profile: 'invalid', country: null }), {
+    profile: 'openai',
+    country: null,
+  });
+});
+
+test('connectivity results persist and support target filtering', () => {
+  const addr = '10.10.10.10:1080';
+  store.recordConnectivity(addr, [{
+    id: 'github',
+    name: 'GitHub',
+    url: 'https://github.com/',
+    available: true,
+    latencyMs: 123,
+    statusCode: 200,
+  }], 123456);
+  assert.equal(store.connectivitySummaries([addr]).get(addr)?.available, 1);
+  assert.ok(store.get({ n: 100, target: 'github' }).some((proxy) => proxy.addr === addr));
+});
+
+test('proxy queries paginate with a stable total', () => {
+  const total = store.count({ minScore: 1 });
+  const first = store.get({ n: 1, offset: 0, minScore: 1 });
+  const second = store.get({ n: 1, offset: 1, minScore: 1 });
+  assert.ok(total >= 2);
+  assert.equal(first.length, 1);
+  assert.equal(second.length, 1);
+  assert.notEqual(first[0]?.addr, second[0]?.addr);
 });

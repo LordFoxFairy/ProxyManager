@@ -6,19 +6,165 @@ const num = (k: string, d: number) => Number(process.env[k] ?? d);
 
 export const DB_PATH = env('PM_DB', join(homedir(), '.proxymanager', 'pool.db'));
 
+export type SourceScheme = 'http' | 'socks4' | 'socks5' | null;
+
+export interface SourceConfig {
+  name: string;
+  url: string;
+  scheme: SourceScheme;
+  recommended: boolean;
+  format?: 'lines' | 'zdaye';
+  pages?: number;
+}
+
 /**
- * Free proxy lists. Both `scheme://host:port` and bare `host:port` appear, so
- * `scheme` is the fallback when a line carries none.
+ * Public proxy sources. Recommended sources are enabled for a fresh database;
+ * every source remains independently switchable in the control panel.
  */
-export const SOURCES = [
-  { name: 'proxifly', url: 'https://cdn.jsdelivr.net/gh/proxifly/free-proxy-list@main/proxies/all/data.txt', scheme: null },
-  { name: 'speedx-http', url: 'https://raw.githubusercontent.com/TheSpeedX/PROXY-List/master/http.txt', scheme: 'http' },
-  { name: 'speedx-socks5', url: 'https://raw.githubusercontent.com/TheSpeedX/PROXY-List/master/socks5.txt', scheme: 'socks5' },
-  { name: 'speedx-socks4', url: 'https://raw.githubusercontent.com/TheSpeedX/PROXY-List/master/socks4.txt', scheme: 'socks4' },
-  { name: 'monosans-http', url: 'https://raw.githubusercontent.com/monosans/proxy-list/main/proxies/http.txt', scheme: 'http' },
-  { name: 'monosans-socks5', url: 'https://raw.githubusercontent.com/monosans/proxy-list/main/proxies/socks5.txt', scheme: 'socks5' },
-  { name: 'monosans-socks4', url: 'https://raw.githubusercontent.com/monosans/proxy-list/main/proxies/socks4.txt', scheme: 'socks4' },
-] as const;
+export const SOURCES: readonly SourceConfig[] = [
+  {
+    name: 'proxyscrape-http',
+    url: 'https://cdn.jsdelivr.net/gh/proxyscrape/free-proxy-list@main/proxies/protocols/http/data.txt',
+    scheme: 'http',
+    recommended: true,
+  },
+  {
+    name: 'proxyscrape-https',
+    url: 'https://cdn.jsdelivr.net/gh/proxyscrape/free-proxy-list@main/proxies/protocols/https/data.txt',
+    scheme: 'http',
+    recommended: false,
+  },
+  {
+    name: 'proxyscrape-socks4',
+    url: 'https://cdn.jsdelivr.net/gh/proxyscrape/free-proxy-list@main/proxies/protocols/socks4/data.txt',
+    scheme: 'socks4',
+    recommended: true,
+  },
+  {
+    name: 'proxyscrape-socks5',
+    url: 'https://cdn.jsdelivr.net/gh/proxyscrape/free-proxy-list@main/proxies/protocols/socks5/data.txt',
+    scheme: 'socks5',
+    recommended: true,
+  },
+  {
+    name: 'zdaye-cn',
+    url: 'https://www.zdaye.com/free/',
+    scheme: null,
+    recommended: false,
+    format: 'zdaye',
+    pages: 5,
+  },
+  {
+    name: 'zdaye-global',
+    url: 'https://www.zdaye.com/free_haiwai/',
+    scheme: null,
+    recommended: false,
+    format: 'zdaye',
+    pages: 5,
+  },
+  {
+    name: 'proxifly',
+    url: 'https://cdn.jsdelivr.net/gh/proxifly/free-proxy-list@main/proxies/all/data.txt',
+    scheme: null,
+    recommended: true,
+  },
+  {
+    name: 'thordata-top-http',
+    url: 'https://raw.githubusercontent.com/Thordata/awesome-free-proxy-list/main/proxies/top-http.txt',
+    scheme: 'http',
+    recommended: true,
+  },
+  {
+    name: 'thordata-http',
+    url: 'https://raw.githubusercontent.com/Thordata/awesome-free-proxy-list/main/proxies/http.txt',
+    scheme: 'http',
+    recommended: false,
+  },
+  {
+    name: 'thordata-https',
+    url: 'https://raw.githubusercontent.com/Thordata/awesome-free-proxy-list/main/proxies/https.txt',
+    scheme: 'http',
+    recommended: false,
+  },
+  {
+    name: 'thordata-socks4',
+    url: 'https://raw.githubusercontent.com/Thordata/awesome-free-proxy-list/main/proxies/socks4.txt',
+    scheme: 'socks4',
+    recommended: false,
+  },
+  {
+    name: 'thordata-socks5',
+    url: 'https://raw.githubusercontent.com/Thordata/awesome-free-proxy-list/main/proxies/socks5.txt',
+    scheme: 'socks5',
+    recommended: true,
+  },
+  {
+    name: 'vpslab-http-elite',
+    url: 'https://raw.githubusercontent.com/VPSLabCloud/VPSLab-Free-Proxy-List/main/http_elite.txt',
+    scheme: 'http',
+    recommended: true,
+  },
+  {
+    name: 'vpslab-http-ssl-elite',
+    url: 'https://raw.githubusercontent.com/VPSLabCloud/VPSLab-Free-Proxy-List/main/http_ssl_elite.txt',
+    scheme: 'http',
+    recommended: false,
+  },
+  {
+    name: 'vpslab-http-anonymous',
+    url: 'https://raw.githubusercontent.com/VPSLabCloud/VPSLab-Free-Proxy-List/main/http_anonymous.txt',
+    scheme: 'http',
+    recommended: false,
+  },
+  {
+    name: 'vpslab-socks4',
+    url: 'https://raw.githubusercontent.com/VPSLabCloud/VPSLab-Free-Proxy-List/main/socks4_all.txt',
+    scheme: 'socks4',
+    recommended: false,
+  },
+  {
+    name: 'vpslab-socks5',
+    url: 'https://raw.githubusercontent.com/VPSLabCloud/VPSLab-Free-Proxy-List/main/socks5_all.txt',
+    scheme: 'socks5',
+    recommended: false,
+  },
+  {
+    name: 'speedx-http',
+    url: 'https://raw.githubusercontent.com/TheSpeedX/PROXY-List/master/http.txt',
+    scheme: 'http',
+    recommended: false,
+  },
+  {
+    name: 'speedx-socks4',
+    url: 'https://raw.githubusercontent.com/TheSpeedX/PROXY-List/master/socks4.txt',
+    scheme: 'socks4',
+    recommended: false,
+  },
+  {
+    name: 'speedx-socks5',
+    url: 'https://raw.githubusercontent.com/TheSpeedX/PROXY-List/master/socks5.txt',
+    scheme: 'socks5',
+    recommended: false,
+  },
+  {
+    name: 'monosans-http',
+    url: 'https://raw.githubusercontent.com/monosans/proxy-list/main/proxies/http.txt',
+    scheme: 'http',
+    recommended: false,
+  },
+  {
+    name: 'monosans-socks4',
+    url: 'https://raw.githubusercontent.com/monosans/proxy-list/main/proxies/socks4.txt',
+    scheme: 'socks4',
+    recommended: false,
+  },
+  {
+    name: 'monosans-socks5',
+    url: 'https://raw.githubusercontent.com/monosans/proxy-list/main/proxies/socks5.txt',
+    scheme: 'socks5',
+    recommended: false,
+  },
+];
 
 /**
  * Echo endpoints, best first. Every one of these has been observed failing
@@ -50,6 +196,8 @@ export const GEO_BATCH_URL = 'http://ip-api.com/batch?fields=status,countryCode,
  */
 export const CHECK_TIMEOUT = num('PM_TIMEOUT', 8000);
 export const CONCURRENCY = num('PM_CONCURRENCY', 150);
+export const TCP_CHECK_TIMEOUT = num('PM_TCP_TIMEOUT', 1500);
+export const TCP_CONCURRENCY = num('PM_TCP_CONCURRENCY', 400);
 
 /**
  * Asymmetric on purpose. A proxy that starts failing is almost always dead, so
@@ -84,4 +232,3 @@ export const PORT = num('PM_PORT', 8787);
  * machine already running one.
  */
 export const GATEWAY_PORT = num('PM_GATEWAY_PORT', 7899);
-

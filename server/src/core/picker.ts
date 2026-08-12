@@ -3,6 +3,11 @@ import { get, recordResult, type Proxy } from './store.js';
 
 export type Strategy = 'url-test' | 'round-robin' | 'random';
 
+export interface PickerFilters {
+  country?: string;
+  target?: string;
+}
+
 /**
  * Chooses which upstream proxy serves the next request.
  *
@@ -28,37 +33,57 @@ export class Picker {
   private cursor = 0;
   private cache: Proxy[] = [];
   private cachedAt = 0;
-  private cachedHttps: boolean | null = null;
+  private cachedKey = '';
 
   /**
    * Live candidates. Cached briefly so a burst of requests does not re-query
    * per connection, but keyed on `httpsOnly` -- reusing an http-only list for
    * an HTTPS request would hand back proxies that cannot do CONNECT.
    */
-  private candidates(httpsOnly: boolean): Proxy[] {
+  private candidates(httpsOnly: boolean, filters: PickerFilters = {}): Proxy[] {
     const now = Date.now();
-    if (this.cachedHttps !== httpsOnly || now - this.cachedAt >= this.cacheMs) {
-      this.cache = get({ n: 200, https: httpsOnly, minScore: 1 });
+    const key = JSON.stringify([httpsOnly, filters.country ?? '', filters.target ?? '']);
+    if (this.cachedKey !== key || now - this.cachedAt >= this.cacheMs) {
+      this.cache = get({
+        n: 200,
+        https: httpsOnly,
+        minScore: 1,
+        country: filters.country,
+        target: filters.target,
+      });
       this.cachedAt = now;
-      this.cachedHttps = httpsOnly;
+      this.cachedKey = key;
     }
     return this.cache;
+  }
+
+  private candidatePool(httpsOnly: boolean, filters: PickerFilters, exclude: Set<string>): Proxy[] {
+    const preferred = this.candidates(httpsOnly, filters).filter((proxy) => !exclude.has(proxy.addr));
+    if (preferred.length || !filters.target) return preferred;
+    // A new service profile has no learned rows yet. Use the region-filtered
+    // pool until real traffic or an explicit probe records a working proxy.
+    return this.candidates(httpsOnly, { country: filters.country })
+      .filter((proxy) => !exclude.has(proxy.addr));
   }
 
   /** Force the next pick to re-read from the store. */
   invalidate() {
     this.cachedAt = 0;
-    this.cachedHttps = null;
+    this.cachedKey = '';
   }
 
   /** Whether any candidate exists, without advancing rotation state. */
-  hasCandidates(httpsOnly: boolean): boolean {
-    return this.candidates(httpsOnly).length > 0;
+  hasCandidates(httpsOnly: boolean, filters: PickerFilters = {}): boolean {
+    return this.candidatePool(httpsOnly, filters, new Set()).length > 0;
   }
 
   /** Pick an upstream, excluding any that already failed for this request. */
-  pick(httpsOnly: boolean, exclude: Set<string> = new Set()): Proxy | null {
-    const pool = this.candidates(httpsOnly).filter((p) => !exclude.has(p.addr));
+  pick(
+    httpsOnly: boolean,
+    exclude: Set<string> = new Set(),
+    filters: PickerFilters = {},
+  ): Proxy | null {
+    const pool = this.candidatePool(httpsOnly, filters, exclude);
     if (!pool.length) return null;
 
     if (this.rotateAfter && this.served >= this.rotateAfter) {

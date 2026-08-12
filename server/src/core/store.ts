@@ -12,6 +12,7 @@ export interface Proxy {
   score: number;
   anonymity: Anonymity | null;
   country: string | null;
+  exit_ip: string | null;
   https: number;
   latency_ms: number | null;
   ok_count: number;
@@ -37,6 +38,7 @@ export function init(): Database.Database {
       score       INTEGER NOT NULL,
       anonymity   TEXT,
       country     TEXT,
+      exit_ip     TEXT,
       https       INTEGER NOT NULL DEFAULT 0,
       latency_ms  INTEGER,
       ok_count    INTEGER NOT NULL DEFAULT 0,
@@ -61,7 +63,32 @@ export function init(): Database.Database {
       active  INTEGER NOT NULL DEFAULT 1
     );
     CREATE INDEX IF NOT EXISTS idx_died ON graveyard(active, died_at);
+
+    CREATE TABLE IF NOT EXISTS app_settings (
+      key   TEXT PRIMARY KEY,
+      value TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS proxy_connectivity (
+      proxy_addr  TEXT    NOT NULL,
+      target_id   TEXT    NOT NULL,
+      target_name TEXT    NOT NULL,
+      target_url  TEXT    NOT NULL,
+      available   INTEGER NOT NULL,
+      latency_ms  INTEGER,
+      status_code INTEGER,
+      checked_at  INTEGER NOT NULL,
+      PRIMARY KEY (proxy_addr, target_id)
+    );
+    CREATE INDEX IF NOT EXISTS idx_connectivity_target
+      ON proxy_connectivity(target_id, available, proxy_addr);
   `);
+
+  // Existing databases predate exit_ip; keep migrations additive and cheap.
+  const proxyColumns = db.pragma('table_info(proxies)') as { name: string }[];
+  if (!proxyColumns.some((column) => column.name === 'exit_ip')) {
+    db.exec('ALTER TABLE proxies ADD COLUMN exit_ip TEXT');
+  }
   return db;
 }
 
@@ -100,6 +127,7 @@ export function pending(limit: number): { addr: string; scheme: Scheme }[] {
 export interface ResultPatch {
   anonymity?: Anonymity | null;
   country?: string | null;
+  exitIp?: string | null;
   latencyMs?: number | null;
   https?: number | null;
   delta?: number;
@@ -127,6 +155,7 @@ export function recordResult(addr: string, ok: boolean, patch: ResultPatch = {})
          fail_count = fail_count + ?,
          anonymity  = COALESCE(?, anonymity),
          country    = COALESCE(?, country),
+         exit_ip    = COALESCE(?, exit_ip),
          latency_ms = COALESCE(?, latency_ms),
          https      = COALESCE(?, https),
          checked_at = ?
@@ -137,6 +166,7 @@ export function recordResult(addr: string, ok: boolean, patch: ResultPatch = {})
       ok ? 0 : 1,
       patch.anonymity ?? null,
       patch.country ?? null,
+      patch.exitIp ?? null,
       patch.latencyMs ?? null,
       patch.https ?? null,
       Date.now(),
@@ -151,9 +181,13 @@ export interface Query {
   country?: string;
   anonymity?: string;
   https?: boolean;
+  exitIp?: boolean;
+  target?: string;
+  search?: string;
+  offset?: number;
 }
 
-export function get(q: Query = {}): Proxy[] {
+function filters(q: Query) {
   const where = ['score >= ?', 'checked_at IS NOT NULL'];
   const args: (string | number)[] = [q.minScore ?? 1];
   for (const [col, val] of [
@@ -167,17 +201,163 @@ export function get(q: Query = {}): Proxy[] {
     }
   }
   if (q.https) where.push('https = 1');
-  args.push(Math.min(q.n ?? 1, 500));
+  if (q.exitIp) where.push('exit_ip IS NOT NULL');
+  if (q.target) {
+    where.push(
+      `EXISTS (SELECT 1 FROM proxy_connectivity pc
+               WHERE pc.proxy_addr = proxies.addr AND pc.target_id = ? AND pc.available = 1)`,
+    );
+    args.push(q.target);
+  }
+  if (q.search) {
+    where.push('(addr LIKE ? OR exit_ip LIKE ?)');
+    args.push(`%${q.search}%`, `%${q.search}%`);
+  }
+  return { where, args };
+}
+
+export function get(q: Query = {}): Proxy[] {
+  const { where, args } = filters(q);
+  args.push(Math.max(1, Math.min(q.n ?? 1, 500)));
+  args.push(Math.max(0, Math.floor(q.offset ?? 0)));
   return conn()
     .prepare(
       `SELECT * FROM proxies WHERE ${where.join(' AND ')}
-       ORDER BY score DESC, latency_ms ASC LIMIT ?`,
+       ORDER BY score DESC, latency_ms ASC LIMIT ? OFFSET ?`,
     )
     .all(...args) as Proxy[];
 }
 
-export const remove = (addr: string): number =>
-  conn().prepare('DELETE FROM proxies WHERE addr = ?').run(addr).changes;
+export function count(q: Query = {}): number {
+  const { where, args } = filters(q);
+  const row = conn()
+    .prepare(`SELECT COUNT(*) count FROM proxies WHERE ${where.join(' AND ')}`)
+    .get(...args) as { count: number };
+  return row.count;
+}
+
+export function remove(addr: string): number {
+  const d = conn();
+  return d.transaction(() => {
+    d.prepare('DELETE FROM proxy_connectivity WHERE proxy_addr = ?').run(addr);
+    return d.prepare('DELETE FROM proxies WHERE addr = ?').run(addr).changes;
+  })();
+}
+
+export const find = (addr: string): Proxy | null =>
+  (conn().prepare('SELECT * FROM proxies WHERE addr = ?').get(addr) as Proxy | undefined) ?? null;
+
+export function getSetting(key: string): string | null {
+  const row = conn().prepare('SELECT value FROM app_settings WHERE key = ?').get(key) as
+    | { value: string }
+    | undefined;
+  return row?.value ?? null;
+}
+
+export function setSetting(key: string, value: string): void {
+  conn()
+    .prepare(
+      `INSERT INTO app_settings (key, value) VALUES (?, ?)
+       ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
+    )
+    .run(key, value);
+}
+
+export interface ConnectivityPatch {
+  id: string;
+  name: string;
+  url: string;
+  available: boolean;
+  latencyMs: number | null;
+  statusCode: number | null;
+}
+
+export function recordConnectivity(addr: string, results: ConnectivityPatch[], checkedAt = Date.now()): void {
+  const stmt = conn().prepare(
+    `INSERT INTO proxy_connectivity
+       (proxy_addr, target_id, target_name, target_url, available, latency_ms, status_code, checked_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+     ON CONFLICT(proxy_addr, target_id) DO UPDATE SET
+       target_name = excluded.target_name,
+       target_url = excluded.target_url,
+       available = excluded.available,
+       latency_ms = excluded.latency_ms,
+       status_code = excluded.status_code,
+       checked_at = excluded.checked_at`,
+  );
+  conn().transaction((rows: ConnectivityPatch[]) => {
+    for (const result of rows) {
+      stmt.run(
+        addr,
+        result.id,
+        result.name,
+        result.url,
+        result.available ? 1 : 0,
+        result.latencyMs,
+        result.statusCode,
+        checkedAt,
+      );
+    }
+  })(results);
+}
+
+export interface ConnectivitySummary {
+  available: number;
+  total: number;
+  checkedAt: number;
+}
+
+export function connectivitySummaries(addrs: string[]): Map<string, ConnectivitySummary> {
+  if (!addrs.length) return new Map();
+  const placeholders = addrs.map(() => '?').join(',');
+  const rows = conn()
+    .prepare(
+      `SELECT proxy_addr, SUM(available) available, COUNT(*) total, MAX(checked_at) checked_at
+       FROM proxy_connectivity WHERE proxy_addr IN (${placeholders}) GROUP BY proxy_addr`,
+    )
+    .all(...addrs) as { proxy_addr: string; available: number; total: number; checked_at: number }[];
+  return new Map(rows.map((row) => [row.proxy_addr, {
+    available: row.available,
+    total: row.total,
+    checkedAt: row.checked_at,
+  }]));
+}
+
+export interface StoredConnectivity {
+  id: string;
+  name: string;
+  url: string;
+  available: boolean;
+  latencyMs: number | null;
+  statusCode: number | null;
+  checkedAt: number;
+}
+
+export function connectivityResults(addr: string): StoredConnectivity[] {
+  const rows = conn()
+    .prepare(
+      `SELECT target_id, target_name, target_url, available, latency_ms, status_code, checked_at
+       FROM proxy_connectivity WHERE proxy_addr = ? ORDER BY checked_at DESC, target_name ASC`,
+    )
+    .all(addr) as {
+      target_id: string;
+      target_name: string;
+      target_url: string;
+      available: number;
+      latency_ms: number | null;
+      status_code: number | null;
+      checked_at: number;
+    }[];
+  return rows.map((row) => ({
+    id: row.target_id,
+    name: row.target_name,
+    url: row.target_url,
+    available: Boolean(row.available),
+    latencyMs: row.latency_ms,
+    statusCode: row.status_code,
+    checkedAt: row.checked_at,
+  }));
+}
 
 /**
  * Drop proxies that hit 0 after being checked, recording each in the graveyard
@@ -192,6 +372,10 @@ export function purgeDead(): number {
        ON CONFLICT(addr) DO UPDATE
          SET died_at = excluded.died_at, deaths = deaths + 1, active = 1`,
     ).run(Date.now());
+    d.prepare(
+      `DELETE FROM proxy_connectivity
+       WHERE proxy_addr IN (SELECT addr FROM proxies WHERE score <= 0 AND checked_at IS NOT NULL)`,
+    ).run();
     return d
       .prepare('DELETE FROM proxies WHERE score <= 0 AND checked_at IS NOT NULL')
       .run().changes;
