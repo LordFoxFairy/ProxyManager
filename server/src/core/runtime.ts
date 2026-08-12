@@ -1,4 +1,5 @@
 import { getSetting, setSetting } from './store.js';
+import { mihomo } from './mihomo.js';
 
 export type RuntimeKind = 'builtin' | 'mihomo';
 export type RuntimeLifecycle = 'stopped' | 'running' | 'degraded' | 'error';
@@ -31,7 +32,7 @@ const VERSION_KEY = 'runtime.config.version';
 const KIND_KEY = 'runtime.kind';
 
 const defaults: RuntimeConfig = {
-  mode: 'rule', mixedPort: 7899, httpPort: 7899, socksPort: 7898,
+  mode: 'rule', mixedPort: 7899, httpPort: 7897, socksPort: 7898,
   systemProxy: false, tun: false, dns: false,
 };
 
@@ -85,7 +86,7 @@ export function getRuntimeStatus(): RuntimeStatus {
   const mihomoAvailable = Boolean(process.env.PM_MIHOMO_BIN);
   return {
     kind,
-    lifecycle: kind === 'mihomo' ? (mihomoAvailable ? 'stopped' : 'degraded') : builtinRunning ? 'running' : 'stopped',
+    lifecycle: kind === 'mihomo' ? (mihomo.running ? 'running' : mihomoAvailable ? 'stopped' : 'degraded') : builtinRunning ? 'running' : 'stopped',
     version: kind === 'mihomo' && mihomoAvailable ? 'sidecar-configured' : kind === 'builtin' ? 'builtin-gateway' : null,
     controller: kind === 'mihomo' ? getSetting('runtime.controller') : null,
     configVersion: readVersion(),
@@ -93,8 +94,22 @@ export function getRuntimeStatus(): RuntimeStatus {
     systemProxy: kind === 'mihomo' && !mihomoAvailable ? 'unsupported' : config.systemProxy ? 'on' : 'off',
     tun: kind === 'mihomo' && !mihomoAvailable ? 'unsupported' : config.tun ? 'on' : 'off',
     capabilities: { systemProxy: kind === 'mihomo' && mihomoAvailable, tun: kind === 'mihomo' && mihomoAvailable, mihomo: mihomoAvailable },
-    lastError: kind === 'mihomo' && !mihomoAvailable ? '未配置 PM_MIHOMO_BIN' : null,
+    lastError: mihomo.error ?? (kind === 'mihomo' && !mihomoAvailable ? '未配置 PM_MIHOMO_BIN' : null),
   };
+}
+
+export async function applyRuntimeAction(action: unknown): Promise<RuntimeStatus> {
+  const kind = readKind();
+  if (kind !== 'mihomo') throw new Error('当前运行时不是 Mihomo');
+  if (action === 'start' || action === 'restart') {
+    if (action === 'restart') await mihomo.stop();
+    await mihomo.start(readConfig());
+  } else if (action === 'stop') {
+    await mihomo.stop();
+  } else {
+    throw new Error('不支持的 Runtime 操作');
+  }
+  return getRuntimeStatus();
 }
 
 export function setRuntimeKind(kind: unknown): RuntimeKind {

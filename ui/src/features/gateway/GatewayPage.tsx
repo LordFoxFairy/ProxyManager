@@ -14,6 +14,7 @@ export function GatewayPage({
   runtimeStatus,
   runtimeConfig,
   onSaveRuntime,
+  onRuntimeAction,
   copied,
   routingSaving,
   routingError,
@@ -27,6 +28,7 @@ export function GatewayPage({
   runtimeStatus: RuntimeStatus;
   runtimeConfig: RuntimeConfig;
   onSaveRuntime: (patch: Partial<RuntimeConfig> & { kind?: 'builtin' | 'mihomo' }) => Promise<void>;
+  onRuntimeAction: (action: 'start' | 'stop' | 'restart') => Promise<void>;
   copied: string;
   routingSaving: boolean;
   routingError: string;
@@ -69,7 +71,7 @@ export function GatewayPage({
       <section className="runtime-control-panel">
         <div className="runtime-control-head">
           <div><strong>运行时</strong><span>{runtimeStatus.kind === 'mihomo' ? 'Mihomo sidecar' : '内置代理池网关'} · 配置 v{runtimeStatus.configVersion}</span></div>
-          <span className={`runtime-pill${runtimeStatus.lifecycle === 'running' ? ' online' : ''}`}>{runtimeStatus.lifecycle === 'running' ? '运行中' : runtimeStatus.lifecycle === 'degraded' ? '能力不完整' : runtimeStatus.lifecycle}</span>
+          <div className="runtime-control-actions"><span className={`runtime-pill${runtimeStatus.lifecycle === 'running' ? ' online' : ''}`}>{runtimeStatus.lifecycle === 'running' ? '运行中' : runtimeStatus.lifecycle === 'degraded' ? '能力不完整' : runtimeStatus.lifecycle}</span>{runtimeStatus.kind === 'mihomo' && <button className="btn btn-icon" title="重启 Mihomo" onClick={() => void onRuntimeAction('restart')}>↻</button>}</div>
         </div>
         <div className="runtime-control-grid">
           <label><span>运行时内核</span><select value={runtimeStatus.kind} onChange={(event) => void onSaveRuntime({ kind: event.target.value as 'builtin' | 'mihomo' })}><option value="builtin">内置网关</option><option value="mihomo">Mihomo</option></select></label>
@@ -78,6 +80,7 @@ export function GatewayPage({
           <button className={`runtime-toggle ${runtimeConfig.tun ? 'active' : ''}`} disabled={!runtimeStatus.capabilities.tun} onClick={() => toggleRuntime('tun')}><strong>TUN 模式</strong><span>{runtimeStatus.tun === 'unsupported' ? '需 Mihomo + 系统权限' : runtimeConfig.tun ? '已开启' : '已关闭'}</span></button>
         </div>
         {runtimeStatus.lastError && <div className="runtime-control-error">{runtimeStatus.lastError}</div>}
+        {runtimeStatus.kind === 'mihomo' && <div className="runtime-control-footer"><span>Sidecar 控制</span><span className="grow" /><button className="btn" disabled={runtimeStatus.lifecycle === 'running'} onClick={() => void onRuntimeAction('start')}>启动</button><button className="btn" disabled={runtimeStatus.lifecycle !== 'running'} onClick={() => void onRuntimeAction('stop')}>停止</button></div>}
       </section>
 
       <section className={`gateway-routing${routingSaving ? ' saving' : ''}`}>

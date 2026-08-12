@@ -21,6 +21,7 @@ import {
   getIpProfile,
   getRuntime,
   updateRuntime,
+  runtimeAction,
   getProxies,
   getProxyConnectivity,
   getStats,
@@ -430,6 +431,16 @@ function useProxyManagerState() {
     setRuntimeConfig(next.config);
   };
 
+  const runRuntimeAction = async (action: 'start' | 'stop' | 'restart') => {
+    try {
+      const next = await runtimeAction(action);
+      setRuntimeStatus(next.status);
+    } catch (error) {
+      setControlError(error instanceof Error ? error.message : 'Runtime 操作失败');
+      await load();
+    }
+  };
+
   const resetProxyFilters = () => {
     setScheme('');
     setOnlyHttps(false);
@@ -522,7 +533,7 @@ function useProxyManagerState() {
   }, [toast]);
 
   return {
-    page, setPage, resourceView, setResourceView, stats, gateway, runtimeStatus, runtimeConfig, saveRuntime, control, automationDraft, setAutomationDraft, controlSaving,
+    page, setPage, resourceView, setResourceView, stats, gateway, runtimeStatus, runtimeConfig, saveRuntime, runRuntimeAction, control, automationDraft, setAutomationDraft, controlSaving,
     controlError, proxies, proxyTotal, proxyPage, setProxyPage, proxyPageSize, setProxyPageSize,
     proxyTotalPages, country, setCountry, anonymity, setAnonymity, minScore, setMinScore,
     targetFilter, setTargetFilter, proxySearch, setProxySearch, selectedProxy, setSelectedProxy,

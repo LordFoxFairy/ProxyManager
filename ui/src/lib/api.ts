@@ -160,6 +160,8 @@ export interface RuntimeStatus {
 export const getRuntime = () => req<{ status: RuntimeStatus; config: RuntimeConfig }>('/runtime');
 export const updateRuntime = (patch: Partial<RuntimeConfig> & { kind?: 'builtin' | 'mihomo' }) =>
   req<{ status: RuntimeStatus; config: RuntimeConfig }>('/runtime', { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify(patch) });
+export const runtimeAction = (action: 'start' | 'stop' | 'restart') =>
+  req<{ status: RuntimeStatus }>('/runtime/action', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ action }) });
 
 export interface AutomationSettings {
   enabled: boolean;

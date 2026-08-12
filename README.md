@@ -18,7 +18,7 @@ npm run dev collect          # 采集候选(约 5,900 个)
 npm run dev validate -n 700  # 校验
 npm run dev get -n 10 --https
 npm run dev serve            # API :8787 + 本地代理 :7899
-npm test                     # 42 个单元测试
+npm test                     # 44 个单元测试
 
 # 桌面应用(会自动拉起后端)
 cd ui && npm install && npm run tauri dev

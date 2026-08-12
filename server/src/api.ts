@@ -23,7 +23,8 @@ import {
   renderBrowserDiagnosticPage,
 } from './core/browser-diagnostics.js';
 import { lookupIpProfile } from './core/ip-profile.js';
-import { getRuntimeConfig, getRuntimeStatus, setRuntimeKind, updateRuntimeConfig } from './core/runtime.js';
+import { applyRuntimeAction, getRuntimeConfig, getRuntimeStatus, setRuntimeKind, updateRuntimeConfig } from './core/runtime.js';
+import { buildMihomoConfig, validateMihomoConfig } from './core/mihomo.js';
 import { gatewayStats, traffic } from './core/gateway.js';
 import { picker } from './core/picker.js';
 import {
@@ -85,6 +86,21 @@ app.patch('/runtime', async (c) => {
   if (patch.kind !== undefined) setRuntimeKind(patch.kind);
   const config = updateRuntimeConfig(patch);
   return c.json({ status: getRuntimeStatus(), config });
+});
+app.post('/runtime/action', async (c) => {
+  let body: { action?: unknown } = {};
+  try { body = await c.req.json(); } catch { /* invalid action below */ }
+  try {
+    const status = await applyRuntimeAction(body.action);
+    return c.json({ status });
+  } catch (error) {
+    return c.json({ error: error instanceof Error ? error.message : 'Runtime 操作失败', status: getRuntimeStatus() }, 409);
+  }
+});
+app.get('/runtime/config-preview', (c) => {
+  const config = getRuntimeConfig();
+  const errors = validateMihomoConfig(config);
+  return c.json({ valid: errors.length === 0, errors, config: buildMihomoConfig(config) });
 });
 
 app.post('/diagnostics/browser/session', (c) => {
