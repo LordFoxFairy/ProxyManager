@@ -426,6 +426,10 @@ function useProxyManagerState() {
   };
 
   const saveRuntime = async (patch: Partial<RuntimeConfig> & { kind?: 'builtin' | 'mihomo' }) => {
+    if (patch.systemProxy !== undefined) {
+      try { await invoke('set_system_proxy', { enabled: patch.systemProxy, port: runtimeConfig?.mixedPort ?? 7899 }); }
+      catch (error) { setControlError(error instanceof Error ? error.message : '系统代理设置失败'); return; }
+    }
     const next = await updateRuntime(patch);
     setRuntimeStatus(next.status);
     setRuntimeConfig(next.config);

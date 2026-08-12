@@ -92,8 +92,8 @@ export function getRuntimeStatus(): RuntimeStatus {
     configVersion: readVersion(),
     configValid: config.mixedPort !== config.socksPort && config.mixedPort !== config.httpPort,
     systemProxy: kind === 'mihomo' && !mihomoAvailable ? 'unsupported' : config.systemProxy ? 'on' : 'off',
-    tun: kind === 'mihomo' && !mihomoAvailable ? 'unsupported' : config.tun ? 'on' : 'off',
-    capabilities: { systemProxy: kind === 'mihomo' && mihomoAvailable, tun: kind === 'mihomo' && mihomoAvailable, mihomo: mihomoAvailable },
+    tun: 'unsupported',
+    capabilities: { systemProxy: kind === 'mihomo' && mihomoAvailable, tun: false, mihomo: mihomoAvailable },
     lastError: mihomo.error ?? (kind === 'mihomo' && !mihomoAvailable ? '未配置 PM_MIHOMO_BIN' : null),
   };
 }

@@ -2,6 +2,15 @@ import { spawn, type ChildProcess } from 'node:child_process';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { getRuntimeConfig, type RuntimeConfig } from './runtime.js';
+import { get, type Proxy } from './store.js';
+
+export interface MihomoProxy {
+  name: string;
+  type: 'http' | 'socks5';
+  server: string;
+  port: number;
+  udp: boolean;
+}
 
 export interface MihomoConfig {
   'mixed-port': number;
@@ -10,12 +19,21 @@ export interface MihomoConfig {
   'log-level': 'info';
   'external-controller': string;
   secret: string;
-  'proxies': [];
-  'proxy-groups': [{ name: 'PROXY'; type: 'select'; proxies: ['DIRECT'] }];
-  rules: ['MATCH,DIRECT'];
+  proxies: MihomoProxy[];
+  'proxy-groups': [{ name: 'PROXY'; type: 'select'; proxies: string[] }];
+  rules: string[];
 }
 
-export function buildMihomoConfig(config: RuntimeConfig, controller = '127.0.0.1:9090', secret = ''): MihomoConfig {
+function nodeToMihomo(proxy: Proxy, index: number): MihomoProxy | null {
+  const [server, portText] = proxy.addr.split(':');
+  const port = Number(portText);
+  if (!server || !Number.isInteger(port) || port < 1 || port > 65535) return null;
+  return { name: `POOL-${index + 1}-${proxy.country ?? 'XX'}`, type: proxy.scheme === 'socks5' ? 'socks5' : 'http', server, port, udp: false };
+}
+
+export function buildMihomoConfig(config: RuntimeConfig, controller = '127.0.0.1:9090', secret = '', nodes: Proxy[] = get({ n: 200, minScore: 1, https: true })): MihomoConfig {
+  const proxies = nodes.map(nodeToMihomo).filter((node): node is MihomoProxy => Boolean(node));
+  const names = proxies.map((proxy) => proxy.name);
   return {
     'mixed-port': config.mixedPort,
     'allow-lan': false,
@@ -23,9 +41,9 @@ export function buildMihomoConfig(config: RuntimeConfig, controller = '127.0.0.1
     'log-level': 'info',
     'external-controller': controller,
     secret,
-    proxies: [],
-    'proxy-groups': [{ name: 'PROXY', type: 'select', proxies: ['DIRECT'] }],
-    rules: ['MATCH,DIRECT'],
+    proxies,
+    'proxy-groups': [{ name: 'PROXY', type: 'select', proxies: [...names, 'DIRECT'] }],
+    rules: ['MATCH,PROXY'],
   };
 }
 
