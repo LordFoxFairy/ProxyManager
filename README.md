@@ -18,7 +18,7 @@ npm run dev collect          # 采集候选(约 5,900 个)
 npm run dev validate -n 700  # 校验
 npm run dev get -n 10 --https
 npm run dev serve            # API :8787 + 本地代理 :7899
-npm test                     # 38 个单元测试
+npm test                     # 40 个单元测试
 
 # 桌面应用(会自动拉起后端)
 cd ui && npm install && npm run tauri dev
@@ -198,7 +198,8 @@ HTTPS CONNECT 隧道;socks5 约 **51%**。真实业务流量绝大多数是 HTTP
 ## 界面
 
 完整的产品边界、健康流水线、任务冲突矩阵和组件结构见
-[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)。
+[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)；Super Clash Verge 的长期产品蓝图见
+[SUPER_CLASH_VERGE_PLAN.md](SUPER_CLASH_VERGE_PLAN.md)。
 
 界面采用固定浅色主题和高密度运维布局，按工作对象分为六页：
 
