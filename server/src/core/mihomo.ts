@@ -26,6 +26,7 @@ export interface MihomoConfig {
   'proxy-groups': { name: string; type: string; proxies: string[]; url?: string; interval?: number; tolerance?: number }[];
   rules: string[];
   dns?: { enable: true; listen: string; 'enhanced-mode': 'fake-ip' | 'redir-host'; nameserver: string[]; fallback: string[] };
+  tun?: { enable: true; stack: 'system' | 'gvisor' | 'mixed'; 'auto-route': boolean; 'auto-detect-interface': boolean; 'dns-hijack': string[] };
 }
 
 function nodeToMihomo(proxy: Proxy, index: number): MihomoProxy | null {
@@ -54,6 +55,7 @@ export function buildMihomoConfig(config: RuntimeConfig, controller = '127.0.0.1
     'proxy-groups': groups,
     rules: [...listRules().filter((rule) => rule.enabled && rule.value).map((rule) => `${rule.kind},${rule.value},${rule.target}`), 'MATCH,PROXY'],
     ...(config.dns ? { dns: { enable: true as const, listen: config.dnsListen, 'enhanced-mode': config.dnsMode, nameserver: config.dnsNameservers, fallback: ['https://1.1.1.1/dns-query', 'https://8.8.8.8/dns-query'] } } : {}),
+    ...(config.tun ? { tun: { enable: true as const, stack: config.tunStack, 'auto-route': config.tunAutoRoute, 'auto-detect-interface': config.tunAutoDetectInterface, 'dns-hijack': config.tunDnsHijack } } : {}),
   };
 }
 

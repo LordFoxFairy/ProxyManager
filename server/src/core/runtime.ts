@@ -15,6 +15,10 @@ export interface RuntimeConfig {
   dnsListen: string;
   dnsMode: 'fake-ip' | 'redir-host';
   dnsNameservers: string[];
+  tunStack: 'system' | 'gvisor' | 'mixed';
+  tunAutoRoute: boolean;
+  tunAutoDetectInterface: boolean;
+  tunDnsHijack: string[];
 }
 
 export interface RuntimeStatus {
@@ -38,7 +42,7 @@ const PREVIOUS_CONFIG_KEY = 'runtime.config.previous';
 
 const defaults: RuntimeConfig = {
   mode: 'rule', mixedPort: 7899, httpPort: 7897, socksPort: 7898,
-  systemProxy: false, tun: false, dns: false, dnsListen: '127.0.0.1:1053', dnsMode: 'fake-ip', dnsNameservers: ['https://dns.alidns.com/dns-query', 'https://cloudflare-dns.com/dns-query'],
+  systemProxy: false, tun: false, dns: false, dnsListen: '127.0.0.1:1053', dnsMode: 'fake-ip', dnsNameservers: ['https://dns.alidns.com/dns-query', 'https://cloudflare-dns.com/dns-query'], tunStack: 'system', tunAutoRoute: true, tunAutoDetectInterface: true, tunDnsHijack: ['any:53', 'tcp://any:53'],
 };
 
 const readConfig = (): RuntimeConfig => {
@@ -52,6 +56,8 @@ const readConfig = (): RuntimeConfig => {
       mode: parsed.mode === 'global' || parsed.mode === 'direct' ? parsed.mode : 'rule',
       dnsMode: parsed.dnsMode === 'redir-host' ? 'redir-host' : 'fake-ip',
       dnsNameservers: Array.isArray(parsed.dnsNameservers) ? parsed.dnsNameservers.filter((item): item is string => typeof item === 'string').slice(0, 8) : defaults.dnsNameservers,
+      tunStack: parsed.tunStack === 'gvisor' || parsed.tunStack === 'mixed' ? parsed.tunStack : 'system',
+      tunDnsHijack: Array.isArray(parsed.tunDnsHijack) ? parsed.tunDnsHijack.filter((item): item is string => typeof item === 'string').slice(0, 8) : defaults.tunDnsHijack,
     };
   } catch { return defaults; }
 };
@@ -76,6 +82,10 @@ export function updateRuntimeConfig(input: unknown): RuntimeConfig {
     dnsListen: typeof patch.dnsListen === 'string' && patch.dnsListen.trim() ? patch.dnsListen.trim().slice(0, 64) : current.dnsListen,
     dnsMode: patch.dnsMode === 'redir-host' ? 'redir-host' : patch.dnsMode === 'fake-ip' ? 'fake-ip' : current.dnsMode,
     dnsNameservers: Array.isArray(patch.dnsNameservers) ? patch.dnsNameservers.filter((item): item is string => typeof item === 'string' && Boolean(item.trim())).map((item) => item.trim()).slice(0, 8) : current.dnsNameservers,
+    tunStack: patch.tunStack === 'gvisor' || patch.tunStack === 'mixed' || patch.tunStack === 'system' ? patch.tunStack : current.tunStack,
+    tunAutoRoute: typeof patch.tunAutoRoute === 'boolean' ? patch.tunAutoRoute : current.tunAutoRoute,
+    tunAutoDetectInterface: typeof patch.tunAutoDetectInterface === 'boolean' ? patch.tunAutoDetectInterface : current.tunAutoDetectInterface,
+    tunDnsHijack: Array.isArray(patch.tunDnsHijack) ? patch.tunDnsHijack.filter((item): item is string => typeof item === 'string' && Boolean(item.trim())).map((item) => item.trim()).slice(0, 8) : current.tunDnsHijack,
   };
   setSetting(PREVIOUS_CONFIG_KEY, JSON.stringify(current));
   setSetting(CONFIG_KEY, JSON.stringify(next));
@@ -116,9 +126,9 @@ export function getRuntimeStatus(): RuntimeStatus {
     configVersion: readVersion(),
     configValid: config.mixedPort !== config.socksPort && config.mixedPort !== config.httpPort,
     systemProxy: kind === 'mihomo' && !mihomoAvailable ? 'unsupported' : config.systemProxy ? 'on' : 'off',
-    tun: 'unsupported',
+    tun: kind === 'mihomo' && mihomoAvailable ? (config.tun ? 'on' : 'off') : 'unsupported',
     dns: kind === 'mihomo' && mihomoAvailable ? (config.dns ? 'on' : 'off') : 'unsupported',
-    capabilities: { systemProxy: kind === 'mihomo' && mihomoAvailable, tun: false, dns: kind === 'mihomo' && mihomoAvailable, mihomo: mihomoAvailable },
+    capabilities: { systemProxy: kind === 'mihomo' && mihomoAvailable, tun: kind === 'mihomo' && mihomoAvailable, dns: kind === 'mihomo' && mihomoAvailable, mihomo: mihomoAvailable },
     lastError: mihomo.error ?? (kind === 'mihomo' && !mihomoAvailable ? '未配置 PM_MIHOMO_BIN' : null),
   };
 }

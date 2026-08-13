@@ -145,6 +145,10 @@ export interface RuntimeConfig {
   dnsListen: string;
   dnsMode: 'fake-ip' | 'redir-host';
   dnsNameservers: string[];
+  tunStack: 'system' | 'gvisor' | 'mixed';
+  tunAutoRoute: boolean;
+  tunAutoDetectInterface: boolean;
+  tunDnsHijack: string[];
 }
 
 export interface RuntimeStatus {
