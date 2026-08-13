@@ -83,8 +83,10 @@ fn set_system_proxy(app: tauri::AppHandle, enabled: bool, port: u16) -> Result<(
     }
     #[cfg(target_os = "windows")]
     {
-        let value = if enabled { format!("127.0.0.1:{}", port) } else { "".to_string() };
-        let args = if enabled { vec!["winhttp", "set", "proxy", value.as_str()] } else { vec!["winhttp", "reset", "proxy"] };
+        let snapshot = if !enabled { std::fs::read_to_string(proxy_snapshot_path(&app)?).unwrap_or_default() } else { String::new() };
+        let original = snapshot.lines().find_map(|line| line.split_once(':').map(|(_, value)| value.trim())).filter(|value| !value.is_empty() && !value.eq_ignore_ascii_case("direct access (no proxy server)"));
+        let value = if enabled { Some(format!("127.0.0.1:{}", port)) } else { original.map(str::to_string) };
+        let args = if let Some(proxy) = value.as_deref() { vec!["winhttp", "set", "proxy", proxy] } else { vec!["winhttp", "reset", "proxy"] };
         let status = Command::new("netsh").args(args).status().map_err(|e| e.to_string())?;
         if !status.success() { return Err("Windows 系统代理设置失败".into()); }
         return Ok(());
