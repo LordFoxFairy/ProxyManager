@@ -28,6 +28,7 @@ import { buildMihomoConfig, mihomo, validateMihomoConfig } from './core/mihomo.j
 import { listProviders, removeProvider, refreshProvider, upsertProvider } from './core/providers.js';
 import { listGroups, removeGroup, upsertGroup } from './core/groups.js';
 import { listRuleProviders, listRules, removeRule, removeRuleProvider, upsertRule, upsertRuleProvider } from './core/rules.js';
+import { exportConfigBundle, importConfigBundle } from './core/config-bundle.js';
 import { gatewayStats, traffic } from './core/gateway.js';
 import { picker } from './core/picker.js';
 import {
@@ -116,6 +117,8 @@ app.get('/runtime/config-preview', (c) => {
   const errors = validateMihomoConfig(config);
   return c.json({ valid: errors.length === 0, errors, config: buildMihomoConfig(config) });
 });
+app.get('/config/export', (c) => c.json(exportConfigBundle()));
+app.post('/config/import', async (c) => { let body: unknown = {}; try { body = await c.req.json(); } catch {} try { const bundle = importConfigBundle(body); await reloadMihomoIfRunning(); return c.json(bundle); } catch (error) { return c.json({ error: error instanceof Error ? error.message : '配置导入失败' }, 400); } });
 app.get('/providers', (c) => c.json({ providers: listProviders() }));
 app.post('/providers', async (c) => { let body: unknown = {}; try { body = await c.req.json(); } catch {} const provider = upsertProvider(body); await reloadMihomoIfRunning(); return c.json(provider); });
 app.patch('/providers/:id', async (c) => { let body: unknown = {}; try { body = await c.req.json(); } catch {} const provider = upsertProvider({ ...(body as object), id: c.req.param('id') }); await reloadMihomoIfRunning(); return c.json(provider); });

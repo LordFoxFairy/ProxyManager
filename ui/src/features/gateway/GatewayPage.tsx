@@ -17,6 +17,8 @@ export function GatewayPage({
   onSaveRuntime,
   onRuntimeAction,
   onRollbackRuntime,
+  onExportConfig,
+  onImportConfig,
   copied,
   routingSaving,
   routingError,
@@ -33,6 +35,8 @@ export function GatewayPage({
   onSaveRuntime: (patch: Partial<RuntimeConfig> & { kind?: 'builtin' | 'mihomo' }) => Promise<void>;
   onRuntimeAction: (action: 'start' | 'stop' | 'restart') => Promise<void>;
   onRollbackRuntime: () => Promise<void>;
+  onExportConfig: () => Promise<void>;
+  onImportConfig: (file: File) => Promise<void>;
   copied: string;
   routingSaving: boolean;
   routingError: string;
@@ -75,7 +79,7 @@ export function GatewayPage({
       <section className="runtime-control-panel">
         <div className="runtime-control-head">
           <div><strong>运行时</strong><span>{runtimeStatus.kind === 'mihomo' ? 'Mihomo sidecar' : '内置代理池网关'} · 配置 v{runtimeStatus.configVersion}</span></div>
-          <div className="runtime-control-actions"><span className={`runtime-pill${runtimeStatus.lifecycle === 'running' ? ' online' : ''}`}>{runtimeStatus.lifecycle === 'running' ? '运行中' : runtimeStatus.lifecycle === 'degraded' ? '能力不完整' : runtimeStatus.lifecycle}</span>{runtimeStatus.kind === 'mihomo' && <><button className="btn btn-icon" title="重启 Mihomo" onClick={() => void onRuntimeAction('restart')}>↻</button><button className="btn" onClick={() => void onRollbackRuntime()}>回滚配置</button></>}</div>
+          <div className="runtime-control-actions"><span className={`runtime-pill${runtimeStatus.lifecycle === 'running' ? ' online' : ''}`}>{runtimeStatus.lifecycle === 'running' ? '运行中' : runtimeStatus.lifecycle === 'degraded' ? '能力不完整' : runtimeStatus.lifecycle}</span>{runtimeStatus.kind === 'mihomo' && <><button className="btn btn-icon" title="重启 Mihomo" onClick={() => void onRuntimeAction('restart')}>↻</button><button className="btn" onClick={() => void onRollbackRuntime()}>回滚配置</button></>}<button className="btn" onClick={() => void onExportConfig()}>导出配置</button><label className="btn">导入配置<input type="file" accept="application/json" hidden onChange={(event) => { const file = event.target.files?.[0]; if (file) void onImportConfig(file); event.currentTarget.value = ''; }} /></label></div>
         </div>
         <div className="runtime-control-grid">
           <label><span>运行时内核</span><select value={runtimeStatus.kind} onChange={(event) => void onSaveRuntime({ kind: event.target.value as 'builtin' | 'mihomo' })}><option value="builtin">内置网关</option><option value="mihomo">Mihomo</option></select></label>

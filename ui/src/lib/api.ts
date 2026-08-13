@@ -196,6 +196,8 @@ export const getRuleProviders = () => req<{ providers: RuleProvider[] }>('/rule-
 export const saveRuleProvider = (provider: Partial<RuleProvider>) => req<RuleProvider>('/rule-providers', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(provider) });
 export const patchRuleProvider = (id: string, patch: Partial<RuleProvider>) => req<RuleProvider>(`/rule-providers/${encodeURIComponent(id)}`, { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify(patch) });
 export const removeRuleProvider = (id: string) => req<{ deleted: string }>(`/rule-providers/${encodeURIComponent(id)}`, { method: 'DELETE' });
+export const exportConfig = () => req<Record<string, unknown>>('/config/export');
+export const importConfig = (bundle: unknown) => req<Record<string, unknown>>('/config/import', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(bundle) });
 
 export interface AutomationSettings {
   enabled: boolean;
