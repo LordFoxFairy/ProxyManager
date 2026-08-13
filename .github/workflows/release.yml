@@ -99,6 +99,24 @@ jobs:
           curl -fsSL "$URL" -o "/tmp/${ASSET}"
           if [[ "${ASSET}" == *.zip ]]; then 7z e "/tmp/${ASSET}" -o runtime/mihomo -y >/dev/null; else gzip -dc "/tmp/${ASSET}" > runtime/mihomo/mihomo; chmod +x runtime/mihomo/mihomo; fi
 
+      - name: Smoke test bundled runtimes
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "${{ runner.os }}" == "Windows" ]]; then
+            NODE="runtime/node/node.exe"
+            MIHOMO="runtime/mihomo/mihomo.exe"
+          else
+            NODE="runtime/node/bin/node"
+            MIHOMO="runtime/mihomo/mihomo"
+            chmod +x "$NODE" "$MIHOMO"
+          fi
+          test -x "$NODE" || test -f "$NODE"
+          test -f server/bundle/cli.js
+          PM_DB="$RUNNER_TEMP/proxymanager-smoke.db" "$NODE" server/bundle/cli.js stats >/tmp/proxymanager-stats.json
+          grep -q '"total"' /tmp/proxymanager-stats.json
+          "$MIHOMO" -v
+
       - name: Build and publish Tauri installer
         uses: tauri-apps/tauri-action@v0
         env:
