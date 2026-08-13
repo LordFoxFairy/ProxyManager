@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 import { serve } from '@hono/node-server';
 import { GATEWAY_PORT, HOST, PORT, VALIDATE_BATCH } from './config.js';
-import { app, startLoop } from './api.js';
+import { app, startLoop, stopLoop } from './api.js';
 import { collect } from './core/collect.js';
-import { startGateway } from './core/gateway.js';
+import { startGateway, stopGateway } from './core/gateway.js';
 import * as store from './core/store.js';
 import { run as validate } from './core/validate.js';
 
@@ -57,12 +57,16 @@ async function main() {
       const port = flag(args, '--port', PORT);
       const gwPort = flag(args, '--gateway-port', GATEWAY_PORT);
       startLoop();
-      serve({ fetch: app.fetch, hostname: HOST, port });
+      const apiServer = serve({ fetch: app.fetch, hostname: HOST, port });
       console.log(`ProxyManager API on http://${HOST}:${port}`);
+      let gatewayServer: ReturnType<typeof startGateway> | null = null;
       if (!args.includes('--no-gateway')) {
-        startGateway(gwPort);
+        gatewayServer = startGateway(gwPort);
         console.log(`  use it:  export https_proxy=http://127.0.0.1:${gwPort}`);
       }
+      const shutdown = async () => { stopLoop(); await stopGateway(gatewayServer); apiServer.close(); };
+      process.once('SIGINT', () => void shutdown().finally(() => process.exit(0)));
+      process.once('SIGTERM', () => void shutdown().finally(() => process.exit(0)));
       break;
     }
 

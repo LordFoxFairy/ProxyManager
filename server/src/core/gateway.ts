@@ -328,3 +328,9 @@ export function startGateway(port: number, host = '127.0.0.1') {
   });
   return server;
 }
+
+export function stopGateway(server: http.Server | null | undefined): Promise<void> {
+  gatewayStats.running = false;
+  if (!server || !server.listening) return Promise.resolve();
+  return new Promise((resolve) => server.close(() => resolve()));
+}

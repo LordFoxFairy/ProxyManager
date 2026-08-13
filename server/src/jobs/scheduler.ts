@@ -64,4 +64,10 @@ export class JobScheduler {
     }
     return this.timer;
   }
+
+  stop() {
+    this.started = false;
+    if (this.timer) clearTimeout(this.timer);
+    this.timer = null;
+  }
 }

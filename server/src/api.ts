@@ -466,3 +466,7 @@ export async function cycle(
 export function startLoop() {
   return scheduler.start();
 }
+
+export function stopLoop() {
+  scheduler.stop();
+}
