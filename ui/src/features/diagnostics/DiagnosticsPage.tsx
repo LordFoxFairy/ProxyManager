@@ -14,7 +14,7 @@ import {
 } from 'lucide-react';
 import { useState, type ComponentType, type CSSProperties } from 'react';
 import { fmtAge } from '../../components/Pieces';
-import type { BrowserDiagnosticSession, ConnectivityResult, ConnectivityTarget, Gateway, IpProfile, Proxy, Stats } from '../../lib/api';
+import type { BrowserDiagnosticSession, ConnectivityResult, ConnectivityTarget, Gateway, IpProfile, Proxy, RuntimeConfig, RuntimeStatus, Stats } from '../../lib/api';
 
 type Suite = 'quick' | 'services' | 'profile' | 'leaks';
 
@@ -37,6 +37,8 @@ export function DiagnosticsPage({
   browserDiagnosticError,
   onOpenBrowser,
   ipProfile,
+  runtimeStatus,
+  runtimeConfig,
 }: {
   stats: Stats;
   gateway: Gateway | null;
@@ -56,6 +58,8 @@ export function DiagnosticsPage({
   browserDiagnosticError: string;
   onOpenBrowser: () => Promise<void>;
   ipProfile: IpProfile | null;
+  runtimeStatus: RuntimeStatus | null;
+  runtimeConfig: RuntimeConfig | null;
 }) {
   const [suite, setSuite] = useState<Suite>('quick');
   const activeProxy = mode === 'proxy' ? proxy : gatewayProxy;
@@ -150,7 +154,7 @@ export function DiagnosticsPage({
       {suite === 'leaks' && (
         <section className="diagnostic-module-grid">
           <DiagnosticModule title="IPv4 / IPv6 出口" status={browserSession?.state === 'complete' ? '浏览器证据已回传' : '需打开默认浏览器'} icon={Globe2} rows={[["HTTP IPv4", browserSession?.evidence?.ipv4 ?? exitIp ?? '—'], ['HTTP IPv6', browserSession?.evidence?.ipv6 ?? '待检测'], ['国家一致性', browserSession?.evidence?.ipv4 && exitIp ? browserSession.evidence.ipv4 === exitIp ? '与网关出口一致' : '存在差异' : '待检测']]} muted={!browserSession?.evidence} />
-          <DiagnosticModule title="DNS 泄漏" status="需配置唯一域名探针" icon={Wifi} rows={[["解析器", '待配置回传服务'], ['解析器国家', '待配置回传服务'], ['与出口一致性', '待配置回传服务']]} muted />
+          <DiagnosticModule title="DNS 接管" status={runtimeStatus?.features.dns === 'active' ? '监听正常' : runtimeStatus?.features.dns === 'failed' ? '监听失败' : runtimeConfig?.dns ? '检测中' : '未启用'} icon={Wifi} rows={[["监听地址", runtimeConfig?.dnsListen ?? '—'], ['增强模式', runtimeConfig?.dnsMode ?? '—'], ['UDP 查询探针', runtimeStatus?.platform.dnsPermission === 'active' ? '响应正常' : runtimeStatus?.platform.dnsPermission === 'failed' ? '无响应' : '待检测']]} muted={!runtimeConfig?.dns} />
           <DiagnosticModule title="WebRTC 泄漏" status={browserSession?.state === 'complete' ? '浏览器证据已回传' : '需打开默认浏览器'} icon={CircleDot} rows={[["公网候选", browserSession?.evidence?.webrtcPublic.join(', ') || '未发现'], ['本地候选', browserSession?.evidence?.webrtcPrivate.join(', ') || '未发现'], ['mDNS 主机名', browserSession?.evidence?.webrtcMdns ? '已发现' : '未发现']]} muted={!browserSession?.evidence} />
           <DiagnosticModule title="环境一致性" status={browserSession?.state === 'complete' ? '浏览器证据已回传' : '需打开默认浏览器'} icon={Code2} rows={[["时区", browserSession?.evidence?.timezone ?? '待检测'], ['语言', browserSession?.evidence?.languages.join(', ') || '待检测'], ['UA / 内核', browserSession?.evidence?.userAgent ?? '待检测']]} muted={!browserSession?.evidence} />
         </section>
