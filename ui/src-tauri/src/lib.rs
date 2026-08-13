@@ -165,9 +165,15 @@ fn set_system_proxy(app: tauri::AppHandle, enabled: bool, port: u16) -> Result<(
 fn system_proxy_status() -> Result<bool, String> {
     #[cfg(target_os = "macos")]
     {
-        let output = Command::new("networksetup").args(["-getwebproxy", "Wi-Fi"]).output().map_err(|e| e.to_string())?;
-        let text = String::from_utf8_lossy(&output.stdout).to_ascii_lowercase();
-        return Ok(text.lines().any(|line| line.trim() == "enabled: yes"));
+        let services = Command::new("networksetup").arg("-listallnetworkservices").output().map_err(|e| e.to_string())?;
+        for service in String::from_utf8_lossy(&services.stdout).lines().map(str::trim).filter(|line| !line.is_empty() && !line.starts_with('*')) {
+            for flag in ["-getwebproxy", "-getsecurewebproxy"] {
+                let output = Command::new("networksetup").args([flag, service]).output().map_err(|e| e.to_string())?;
+                let text = String::from_utf8_lossy(&output.stdout).to_ascii_lowercase();
+                if text.lines().any(|line| line.trim() == "enabled: yes") { return Ok(true); }
+            }
+        }
+        return Ok(false);
     }
     #[cfg(target_os = "linux")]
     {
