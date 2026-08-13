@@ -164,6 +164,14 @@ function tcpProbe(address: string, timeoutMs = 700): Promise<boolean> {
   });
 }
 
+export function dnsResponseMatches(message: Buffer, id: number): boolean {
+  return message.length >= 12
+    && message[0] === ((id >> 8) & 255)
+    && message[1] === (id & 255)
+    && (message[2]! & 0x80) !== 0
+    && (message[3]! & 0x0f) === 0;
+}
+
 function dnsProbe(address: string, timeoutMs = 1000): Promise<boolean> {
   const match = address.match(/^\[?([^\]]+)\]?:([0-9]+)$/);
   if (!match) return Promise.resolve(false);
@@ -177,7 +185,7 @@ function dnsProbe(address: string, timeoutMs = 1000): Promise<boolean> {
     let settled = false;
     const finish = (value: boolean) => { if (settled) return; settled = true; clearTimeout(timer); socket.close(); resolve(value); };
     const timer = setTimeout(() => finish(false), timeoutMs);
-    socket.on('message', (message) => finish(message.length >= 12 && message[0] === packet[0] && message[1] === packet[1] && (message[3]! & 0x0f) !== 0));
+    socket.on('message', (message) => finish(dnsResponseMatches(message, id)));
     socket.on('error', () => finish(false));
     socket.send(packet, port, host, (error) => { if (error) finish(false); });
   });

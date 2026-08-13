@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { getRuntimeConfig, getRuntimeStatus, setRuntimeKind, updateRuntimeConfig } from './runtime.js';
+import { dnsResponseMatches, getRuntimeConfig, getRuntimeStatus, setRuntimeKind, updateRuntimeConfig } from './runtime.js';
 import './store.js';
 
 test('runtime config clamps ports and preserves a valid mode', () => {
@@ -22,4 +22,11 @@ test('mihomo runtime reports degraded when no sidecar is configured', () => {
   if (previous) process.env.PM_MIHOMO_BIN = previous;
   else delete process.env.PM_MIHOMO_BIN;
   setRuntimeKind('builtin');
+});
+
+test('DNS probe accepts successful responses and rejects mismatched or failed responses', () => {
+  const id = 0x1234;
+  assert.equal(dnsResponseMatches(Buffer.from([0x12, 0x34, 0x81, 0, 0, 1, 0, 1, 0, 0, 0, 0]), id), true);
+  assert.equal(dnsResponseMatches(Buffer.from([0x12, 0x35, 0x81, 0, 0, 1, 0, 1, 0, 0, 0, 0]), id), false);
+  assert.equal(dnsResponseMatches(Buffer.from([0x12, 0x34, 0x81, 3, 0, 1, 0, 0, 0, 0, 0, 0]), id), false);
 });
