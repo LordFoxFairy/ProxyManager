@@ -212,11 +212,19 @@ fn tun_status() -> Result<serde_json::Value, String> {
     Ok(serde_json::json!({ "state": "unsupported", "active": false, "device": false, "detail": "当前平台不支持 TUN 探测" }))
 }
 
-fn restore_system_proxy(app: &tauri::AppHandle) {
-    let path = match proxy_snapshot_path(app) { Ok(path) => path, Err(_) => return };
-    if !path.exists() { return; }
-    if set_system_proxy(app.clone(), false, 0).is_ok() {
-        let _ = std::fs::remove_file(path);
+fn restore_system_proxy(app: &tauri::AppHandle) -> Result<bool, String> {
+    let path = proxy_snapshot_path(app)?;
+    if !path.exists() { return Ok(false); }
+    set_system_proxy(app.clone(), false, 0)?;
+    std::fs::remove_file(path).map_err(|error| error.to_string())?;
+    Ok(true)
+}
+
+fn recover_stale_system_proxy(app: &tauri::AppHandle) {
+    match restore_system_proxy(app) {
+        Ok(true) => eprintln!("restored stale system proxy snapshot during startup"),
+        Ok(false) => {}
+        Err(error) => eprintln!("failed to restore stale system proxy snapshot: {error}"),
     }
 }
 
@@ -225,7 +233,9 @@ fn restore_system_proxy(app: &tauri::AppHandle) {
 struct Backend(Mutex<Option<Child>>);
 
 fn stop_backend(app: &tauri::AppHandle) {
-    restore_system_proxy(app);
+    if let Err(error) = restore_system_proxy(app) {
+        eprintln!("failed to restore system proxy on shutdown: {error}");
+    }
     if let Some(mut child) = app.state::<Backend>().0.lock().unwrap().take() {
         let _ = child.kill();
     }
@@ -296,6 +306,7 @@ pub fn run() {
                         .build(),
                 )?;
             }
+            recover_stale_system_proxy(app.handle());
             let child = spawn_backend(app.handle());
             *app.state::<Backend>().0.lock().unwrap() = child;
             let show = MenuItemBuilder::with_id("show", "打开 ProxyManager").build(app)?;
