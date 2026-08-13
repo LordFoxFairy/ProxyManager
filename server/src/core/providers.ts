@@ -20,5 +20,20 @@ function valueOf(block: string, key: string) { return block.match(new RegExp(`(?
 function decodeBase64(text: string): string | null { try { const decoded = Buffer.from(text.trim(), 'base64').toString('utf8'); return decoded.includes('://') || decoded.includes('proxies:') ? decoded : null; } catch { return null; } }
 function parseUri(line: string): ProviderNode | null { try { const url = new URL(line.trim()); const port = Number(url.port); const scheme = url.protocol.replace(':', ''); const type = scheme === 'socks5' || scheme === 'http' ? scheme : ''; if (!url.hostname || !port || !type) return null; return { name: decodeURIComponent(url.hash.slice(1)) || `${type}-${url.hostname}:${port}`, type, server: url.hostname, port }; } catch { return null; } }
 function parseText(text: string): ProviderNode[] { let value: unknown = null; try { value = JSON.parse(text); } catch {} if (value && typeof value === 'object' && Array.isArray((value as Record<string, unknown>).proxies)) return normalizeNodes((value as Record<string, unknown>).proxies as unknown[]); const source = decodeBase64(text) ?? text; const uriNodes = source.split(/\r?\n/).map(parseUri).filter((node): node is ProviderNode => Boolean(node)); if (uriNodes.length) return uriNodes; return normalizeNodes(source.split(/\n(?=\s*-\s*name\s*:)/).map((block) => { const name = valueOf(block, 'name'); const type = valueOf(block, 'type'); const server = valueOf(block, 'server'); const port = Number(valueOf(block, 'port')); return name && type && server && Number.isInteger(port) ? { name, type, server, port } : null; })); }
-export async function refreshProvider(id: string): Promise<Provider> { const provider = read().find((item) => item.id === id); if (!provider) throw new Error('Provider 不存在'); if (!provider.url) throw new Error('Provider 没有 URL'); const response = await fetch(provider.url, { signal: AbortSignal.timeout(30_000), headers: { 'user-agent': 'ProxyManager/0.1 provider' } }); if (!response.ok) throw new Error(`HTTP ${response.status}`); const nodes = parseText(await response.text()); if (!nodes.length) throw new Error('未解析出可用节点'); return upsertProvider({ ...provider, nodes, updatedAt: Date.now(), lastError: null }); }
+export async function refreshProvider(id: string): Promise<Provider> {
+  const provider = read().find((item) => item.id === id);
+  if (!provider) throw new Error('Provider 不存在');
+  if (!provider.url) throw new Error('Provider 没有 URL');
+  try {
+    const response = await fetch(provider.url, { signal: AbortSignal.timeout(30_000), headers: { 'user-agent': 'ProxyManager/0.1 provider' } });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const nodes = parseText(await response.text());
+    if (!nodes.length) throw new Error('未解析出可用节点');
+    return upsertProvider({ ...provider, nodes, updatedAt: Date.now(), lastError: null });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Provider 更新失败';
+    upsertProvider({ ...provider, lastError: message });
+    throw error;
+  }
+}
 export function providerNodes(): ProviderNode[] { return read().filter((provider) => provider.enabled).flatMap((provider) => provider.nodes); }
