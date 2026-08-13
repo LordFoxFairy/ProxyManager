@@ -63,6 +63,8 @@ export function validateMihomoConfig(config: RuntimeConfig): string[] {
   if (ports.some((port) => !Number.isInteger(port) || port < 1024 || port > 65535)) errors.push('端口必须在 1024-65535');
   if (new Set(ports).size !== ports.length) errors.push('mixed/http/socks 端口不能重复');
   if (!['rule', 'global', 'direct'].includes(config.mode)) errors.push('不支持的运行模式');
+  if (!/^((127\.0\.0\.1|0\.0\.0\.0|\[::1\]|\[::\]):)?\d+$/.test(config.dnsListen) && !/^\[[0-9a-f:]+\]:\d+$/i.test(config.dnsListen)) errors.push('DNS 监听地址格式无效');
+  if (config.dnsNameservers.length === 0) errors.push('至少配置一个 DNS 上游');
   return errors;
 }
 
@@ -91,6 +93,12 @@ export class MihomoController {
     this.child.once('exit', (code, signal) => {
       if (code !== 0 && signal !== 'SIGTERM') this.lastError = `Mihomo 已退出 (${code ?? signal ?? 'unknown'})`;
       this.child = null;
+    });
+    await new Promise<void>((resolve, reject) => {
+      const child = this.child!;
+      const timer = setTimeout(() => resolve(), 300);
+      child.once('error', (error) => { clearTimeout(timer); reject(error); });
+      child.once('exit', (code, signal) => { clearTimeout(timer); reject(new Error(`Mihomo 启动失败 (${code ?? signal ?? 'unknown'})`)); });
     });
   }
 
