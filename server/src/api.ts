@@ -14,6 +14,8 @@ import {
   checkProxyConnectivity,
   DEFAULT_CONNECTIVITY_TARGETS,
   normalizeConnectivityTargets,
+  listCustomConnectivityTargets,
+  replaceCustomConnectivityTargets,
 } from './core/connectivity.js';
 import { getAutomationSettings, updateAutomationSettings } from './core/control.js';
 import {
@@ -295,7 +297,8 @@ app.post('/collect', (c) => {
   return c.json({ started: true });
 });
 
-app.get('/connectivity', (c) => c.json({ targets: DEFAULT_CONNECTIVITY_TARGETS }));
+app.get('/connectivity', (c) => c.json({ targets: [...DEFAULT_CONNECTIVITY_TARGETS, ...listCustomConnectivityTargets()] }));
+app.put('/connectivity/custom', async (c) => { let body: unknown = []; try { body = (await c.req.json<{ targets?: unknown }>()).targets ?? []; } catch {} return c.json({ targets: replaceCustomConnectivityTargets(body) }); });
 
 app.post('/connectivity/check', async (c) => {
   let input: unknown;

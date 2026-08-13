@@ -5,6 +5,7 @@ import { SocksProxyAgent } from 'socks-proxy-agent';
 import { CHECK_TIMEOUT } from '../config.js';
 import { SERVICE_PROFILES } from './services.js';
 import { get, type Proxy } from './store.js';
+import { getSetting, setSetting } from './store.js';
 
 const MAX_TARGETS = 14;
 const MAX_ATTEMPTS = 3;
@@ -28,6 +29,9 @@ export const DEFAULT_CONNECTIVITY_TARGETS: ConnectivityTarget[] = [
   { id: 'cloudflare', name: 'Cloudflare', url: 'https://www.cloudflare.com/cdn-cgi/trace' },
   { id: 'wikipedia', name: 'Wikipedia', url: 'https://www.wikipedia.org/' },
 ];
+const CUSTOM_KEY = 'connectivity.custom-targets';
+export function listCustomConnectivityTargets(): ConnectivityTarget[] { try { const value = JSON.parse(getSetting(CUSTOM_KEY) ?? '[]'); return normalizeConnectivityTargets(value); } catch { return []; } }
+export function replaceCustomConnectivityTargets(value: unknown): ConnectivityTarget[] { const targets = normalizeConnectivityTargets(value); setSetting(CUSTOM_KEY, JSON.stringify(targets.slice(0, 6))); return targets.slice(0, 6); }
 
 /** Keep the loopback API from becoming an arbitrary local-network request relay. */
 export function normalizeConnectivityTargets(input: unknown): ConnectivityTarget[] {

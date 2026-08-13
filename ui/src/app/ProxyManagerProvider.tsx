@@ -13,6 +13,7 @@ import {
   collectAllSources,
   collectSource,
   getConnectivityTargets,
+  saveCustomConnectivityTargets,
   getControl,
   getGateway,
   getLog,
@@ -198,7 +199,7 @@ function useProxyManagerState() {
 
   useEffect(() => {
     void getConnectivityTargets()
-      .then(({ targets }) => setConnectivityTargets([...targets, ...customTargets]))
+      .then(({ targets }) => setConnectivityTargets(targets))
       .catch(() => setConnectivityTargets(customTargets));
   }, []);
 
@@ -327,6 +328,7 @@ function useProxyManagerState() {
       const nextCustom = [...customTargets, target];
       const nextTargets = [...connectivityTargets, target];
       saveCustomTargets(nextCustom);
+      void saveCustomConnectivityTargets(nextCustom);
       setConnectivityTargets(nextTargets);
       setTargetName('');
       setTargetUrl('');
@@ -341,6 +343,7 @@ function useProxyManagerState() {
   const dropTarget = (id: string) => {
     const nextCustom = customTargets.filter((target) => target.id !== id);
     saveCustomTargets(nextCustom);
+    void saveCustomConnectivityTargets(nextCustom);
     setConnectivityTargets((targets) => targets.filter((target) => target.id !== id));
     setConnectivityResults((results) => {
       const next = { ...results };

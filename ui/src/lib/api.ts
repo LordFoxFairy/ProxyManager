@@ -329,6 +329,7 @@ export const collectAllSources = () =>
 
 export const getConnectivityTargets = () =>
   req<{ targets: ConnectivityTarget[] }>('/connectivity');
+export const saveCustomConnectivityTargets = (targets: ConnectivityTarget[]) => req<{ targets: ConnectivityTarget[] }>('/connectivity/custom', { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ targets }) });
 
 export const checkConnectivity = (targets: ConnectivityTarget[]) =>
   req<{ checkedAt: number; results: ConnectivityResult[] }>('/connectivity/check', {
