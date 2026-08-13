@@ -12,6 +12,9 @@ export interface RuntimeConfig {
   systemProxy: boolean;
   tun: boolean;
   dns: boolean;
+  dnsListen: string;
+  dnsMode: 'fake-ip' | 'redir-host';
+  dnsNameservers: string[];
 }
 
 export interface RuntimeStatus {
@@ -23,7 +26,8 @@ export interface RuntimeStatus {
   configValid: boolean;
   systemProxy: 'on' | 'off' | 'unsupported';
   tun: 'on' | 'off' | 'unsupported';
-  capabilities: { systemProxy: boolean; tun: boolean; mihomo: boolean };
+  dns: 'on' | 'off' | 'unsupported';
+  capabilities: { systemProxy: boolean; tun: boolean; dns: boolean; mihomo: boolean };
   lastError: string | null;
 }
 
@@ -33,7 +37,7 @@ const KIND_KEY = 'runtime.kind';
 
 const defaults: RuntimeConfig = {
   mode: 'rule', mixedPort: 7899, httpPort: 7897, socksPort: 7898,
-  systemProxy: false, tun: false, dns: false,
+  systemProxy: false, tun: false, dns: false, dnsListen: '127.0.0.1:1053', dnsMode: 'fake-ip', dnsNameservers: ['https://dns.alidns.com/dns-query', 'https://cloudflare-dns.com/dns-query'],
 };
 
 const readConfig = (): RuntimeConfig => {
@@ -45,6 +49,8 @@ const readConfig = (): RuntimeConfig => {
       ...defaults,
       ...parsed,
       mode: parsed.mode === 'global' || parsed.mode === 'direct' ? parsed.mode : 'rule',
+      dnsMode: parsed.dnsMode === 'redir-host' ? 'redir-host' : 'fake-ip',
+      dnsNameservers: Array.isArray(parsed.dnsNameservers) ? parsed.dnsNameservers.filter((item): item is string => typeof item === 'string').slice(0, 8) : defaults.dnsNameservers,
     };
   } catch { return defaults; }
 };
@@ -66,6 +72,9 @@ export function updateRuntimeConfig(input: unknown): RuntimeConfig {
     systemProxy: typeof patch.systemProxy === 'boolean' ? patch.systemProxy : current.systemProxy,
     tun: typeof patch.tun === 'boolean' ? patch.tun : current.tun,
     dns: typeof patch.dns === 'boolean' ? patch.dns : current.dns,
+    dnsListen: typeof patch.dnsListen === 'string' && patch.dnsListen.trim() ? patch.dnsListen.trim().slice(0, 64) : current.dnsListen,
+    dnsMode: patch.dnsMode === 'redir-host' ? 'redir-host' : patch.dnsMode === 'fake-ip' ? 'fake-ip' : current.dnsMode,
+    dnsNameservers: Array.isArray(patch.dnsNameservers) ? patch.dnsNameservers.filter((item): item is string => typeof item === 'string' && Boolean(item.trim())).map((item) => item.trim()).slice(0, 8) : current.dnsNameservers,
   };
   setSetting(CONFIG_KEY, JSON.stringify(next));
   setSetting(VERSION_KEY, String(readVersion() + 1));
@@ -93,7 +102,8 @@ export function getRuntimeStatus(): RuntimeStatus {
     configValid: config.mixedPort !== config.socksPort && config.mixedPort !== config.httpPort,
     systemProxy: kind === 'mihomo' && !mihomoAvailable ? 'unsupported' : config.systemProxy ? 'on' : 'off',
     tun: 'unsupported',
-    capabilities: { systemProxy: kind === 'mihomo' && mihomoAvailable, tun: false, mihomo: mihomoAvailable },
+    dns: kind === 'mihomo' && mihomoAvailable ? (config.dns ? 'on' : 'off') : 'unsupported',
+    capabilities: { systemProxy: kind === 'mihomo' && mihomoAvailable, tun: false, dns: kind === 'mihomo' && mihomoAvailable, mihomo: mihomoAvailable },
     lastError: mihomo.error ?? (kind === 'mihomo' && !mihomoAvailable ? '未配置 PM_MIHOMO_BIN' : null),
   };
 }

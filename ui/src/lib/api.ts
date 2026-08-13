@@ -142,6 +142,9 @@ export interface RuntimeConfig {
   systemProxy: boolean;
   tun: boolean;
   dns: boolean;
+  dnsListen: string;
+  dnsMode: 'fake-ip' | 'redir-host';
+  dnsNameservers: string[];
 }
 
 export interface RuntimeStatus {
@@ -153,7 +156,8 @@ export interface RuntimeStatus {
   configValid: boolean;
   systemProxy: 'on' | 'off' | 'unsupported';
   tun: 'on' | 'off' | 'unsupported';
-  capabilities: { systemProxy: boolean; tun: boolean; mihomo: boolean };
+  dns: 'on' | 'off' | 'unsupported';
+  capabilities: { systemProxy: boolean; tun: boolean; dns: boolean; mihomo: boolean };
   lastError: string | null;
 }
 

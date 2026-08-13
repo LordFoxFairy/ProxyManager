@@ -25,6 +25,7 @@ export interface MihomoConfig {
   proxies: MihomoProxy[];
   'proxy-groups': { name: string; type: string; proxies: string[]; url?: string; interval?: number; tolerance?: number }[];
   rules: string[];
+  dns?: { enable: true; listen: string; 'enhanced-mode': 'fake-ip' | 'redir-host'; nameserver: string[]; fallback: string[] };
 }
 
 function nodeToMihomo(proxy: Proxy, index: number): MihomoProxy | null {
@@ -52,6 +53,7 @@ export function buildMihomoConfig(config: RuntimeConfig, controller = '127.0.0.1
     proxies: merged,
     'proxy-groups': groups,
     rules: [...listRules().filter((rule) => rule.enabled && rule.value).map((rule) => `${rule.kind},${rule.value},${rule.target}`), 'MATCH,PROXY'],
+    ...(config.dns ? { dns: { enable: true as const, listen: config.dnsListen, 'enhanced-mode': config.dnsMode, nameserver: config.dnsNameservers, fallback: ['https://1.1.1.1/dns-query', 'https://8.8.8.8/dns-query'] } } : {}),
   };
 }
 

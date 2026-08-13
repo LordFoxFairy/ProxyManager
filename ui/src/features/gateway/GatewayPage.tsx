@@ -39,7 +39,7 @@ export function GatewayPage({
   onReload: () => Promise<void>;
 }) {
   const envCommand = `export https_proxy=http://127.0.0.1:${gateway.port}`;
-  const toggleRuntime = (key: 'systemProxy' | 'tun') => void onSaveRuntime({ [key]: !runtimeConfig[key] });
+  const toggleRuntime = (key: 'systemProxy' | 'tun' | 'dns') => void onSaveRuntime({ [key]: !runtimeConfig[key] });
   return (
     <>
       <div className="stat-grid">
@@ -78,7 +78,9 @@ export function GatewayPage({
           <label><span>工作模式</span><select value={runtimeConfig.mode} onChange={(event) => void onSaveRuntime({ mode: event.target.value as RuntimeConfig['mode'] })}><option value="rule">规则模式</option><option value="global">全局模式</option><option value="direct">直连模式</option></select></label>
           <button className={`runtime-toggle ${runtimeConfig.systemProxy ? 'active' : ''}`} disabled={!runtimeStatus.capabilities.systemProxy} onClick={() => toggleRuntime('systemProxy')}><strong>系统代理</strong><span>{runtimeStatus.systemProxy === 'unsupported' ? '需 Mihomo' : runtimeConfig.systemProxy ? '已开启' : '已关闭'}</span></button>
           <button className={`runtime-toggle ${runtimeConfig.tun ? 'active' : ''}`} disabled={!runtimeStatus.capabilities.tun} onClick={() => toggleRuntime('tun')}><strong>TUN 模式</strong><span>{runtimeStatus.tun === 'unsupported' ? '需 Mihomo + 系统权限' : runtimeConfig.tun ? '已开启' : '已关闭'}</span></button>
+          <button className={`runtime-toggle ${runtimeConfig.dns ? 'active' : ''}`} disabled={!runtimeStatus.capabilities.dns} onClick={() => toggleRuntime('dns')}><strong>DNS 接管</strong><span>{runtimeStatus.dns === 'unsupported' ? '需 Mihomo' : runtimeConfig.dns ? `${runtimeConfig.dnsMode} · ${runtimeConfig.dnsListen}` : '已关闭'}</span></button>
         </div>
+        {runtimeStatus.capabilities.dns && <div className="runtime-dns-fields"><label><span>增强模式</span><select value={runtimeConfig.dnsMode} onChange={(event) => void onSaveRuntime({ dnsMode: event.target.value as RuntimeConfig['dnsMode'] })}><option value="fake-ip">Fake-IP</option><option value="redir-host">redir-host</option></select></label><label><span>监听地址</span><input value={runtimeConfig.dnsListen} onChange={(event) => void onSaveRuntime({ dnsListen: event.target.value })} /></label><label className="dns-wide"><span>上游 DNS（逗号分隔）</span><input value={runtimeConfig.dnsNameservers.join(', ')} onChange={(event) => void onSaveRuntime({ dnsNameservers: event.target.value.split(',').map((item) => item.trim()).filter(Boolean) })} /></label></div>}
         {runtimeStatus.lastError && <div className="runtime-control-error">{runtimeStatus.lastError}</div>}
         {runtimeStatus.kind === 'mihomo' && <div className="runtime-control-footer"><span>Sidecar 控制</span><span className="grow" /><button className="btn" disabled={runtimeStatus.lifecycle === 'running'} onClick={() => void onRuntimeAction('start')}>启动</button><button className="btn" disabled={runtimeStatus.lifecycle !== 'running'} onClick={() => void onRuntimeAction('stop')}>停止</button></div>}
       </section>

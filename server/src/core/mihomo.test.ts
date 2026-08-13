@@ -5,7 +5,7 @@ import type { RuntimeConfig } from './runtime.js';
 
 const config: RuntimeConfig = {
   mode: 'rule', mixedPort: 7899, httpPort: 7897, socksPort: 7898,
-  systemProxy: false, tun: false, dns: false,
+  systemProxy: false, tun: false, dns: false, dnsListen: '127.0.0.1:1053', dnsMode: 'fake-ip', dnsNameservers: ['https://dns.alidns.com/dns-query'],
 };
 
 test('builds a conservative mihomo config with loopback controller', () => {
