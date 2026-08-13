@@ -91,6 +91,7 @@ function useProxyManagerState() {
   const [runtimeStatus, setRuntimeStatus] = useState<RuntimeStatus | null>(null);
   const [runtimeConfig, setRuntimeConfig] = useState<RuntimeConfig | null>(null);
   const [systemProxyActual, setSystemProxyActual] = useState<boolean | null>(null);
+  const [tunActual, setTunActual] = useState<{ state: string; active: boolean; detail: string } | null>(null);
   const [providers, setProviders] = useState<Provider[]>([]);
   const [groups, setGroups] = useState<ProxyGroup[]>([]);
   const [rules, setRules] = useState<RoutingRule[]>([]);
@@ -200,6 +201,17 @@ function useProxyManagerState() {
   useEffect(() => {
     void invoke<boolean>('system_proxy_status').then(setSystemProxyActual).catch(() => setSystemProxyActual(null));
   }, [runtimeConfig?.systemProxy]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const check = async () => {
+      try { const value = await invoke<{ state: string; active: boolean; detail: string }>('tun_status'); if (!cancelled) setTunActual(value); }
+      catch { if (!cancelled) setTunActual(null); }
+    };
+    void check();
+    const timer = window.setInterval(() => void check(), 5000);
+    return () => { cancelled = true; window.clearInterval(timer); };
+  }, []);
 
   useEffect(() => {
     if (!runtimeStatus || runtimeStatus.kind !== 'mihomo') return;
@@ -626,7 +638,7 @@ function useProxyManagerState() {
   }, [toast]);
 
   return {
-    page, setPage, resourceView, setResourceView, stats, gateway, runtimeStatus, runtimeConfig, systemProxyActual, saveRuntime, runRuntimeAction, rollbackRuntimeConfig, exportConfiguration, importConfiguration, desktopUpdate, desktopUpdateBusy, checkDesktopUpdate, installDesktopUpdate, providers, groups, saveProxyGroup, patchProxyGroup, removeProxyGroup, rules, saveRoutingRule, patchRoutingRule, removeRoutingRule, ruleProviders, saveRuleProviderState, patchRuleProviderState, removeRuleProviderState, refreshRuleProviderState, patchProvider, refreshProvider, saveProvider, control, automationDraft, setAutomationDraft, controlSaving,
+    page, setPage, resourceView, setResourceView, stats, gateway, runtimeStatus, runtimeConfig, systemProxyActual, tunActual, saveRuntime, runRuntimeAction, rollbackRuntimeConfig, exportConfiguration, importConfiguration, desktopUpdate, desktopUpdateBusy, checkDesktopUpdate, installDesktopUpdate, providers, groups, saveProxyGroup, patchProxyGroup, removeProxyGroup, rules, saveRoutingRule, patchRoutingRule, removeRoutingRule, ruleProviders, saveRuleProviderState, patchRuleProviderState, removeRuleProviderState, refreshRuleProviderState, patchProvider, refreshProvider, saveProvider, control, automationDraft, setAutomationDraft, controlSaving,
     controlError, proxies, proxyTotal, proxyPage, setProxyPage, proxyPageSize, setProxyPageSize,
     proxyTotalPages, country, setCountry, anonymity, setAnonymity, minScore, setMinScore,
     targetFilter, setTargetFilter, proxySearch, setProxySearch, selectedProxy, setSelectedProxy,

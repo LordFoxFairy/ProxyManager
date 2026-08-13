@@ -184,6 +184,34 @@ fn system_proxy_status() -> Result<bool, String> {
     Err("当前平台不支持读取系统代理状态".into())
 }
 
+#[tauri::command]
+fn tun_status() -> Result<serde_json::Value, String> {
+    #[cfg(target_os = "linux")]
+    {
+        let device = std::path::Path::new("/dev/net/tun").exists();
+        let output = Command::new("ip").args(["-o", "link", "show"]).output();
+        let text = output.as_ref().map(|value| String::from_utf8_lossy(&value.stdout).to_ascii_lowercase()).unwrap_or_default();
+        let active = text.lines().any(|line| line.contains(": tun") || line.contains(" mihomo"));
+        return Ok(serde_json::json!({ "state": if active { "active" } else if device { "inactive" } else { "permission-required" }, "active": active, "device": device, "detail": if active { "TUN 接口已创建" } else if device { "设备可用，等待 Mihomo 创建接口" } else { "缺少 /dev/net/tun" } }));
+    }
+    #[cfg(target_os = "macos")]
+    {
+        let output = Command::new("ifconfig").output();
+        let text = output.as_ref().map(|value| String::from_utf8_lossy(&value.stdout).to_ascii_lowercase()).unwrap_or_default();
+        let active = text.lines().any(|line| line.starts_with("utun"));
+        return Ok(serde_json::json!({ "state": if active { "active" } else { "permission-required" }, "active": active, "device": true, "detail": if active { "utun 接口已创建" } else { "等待 Network Extension 或 Mihomo 创建 utun" } }));
+    }
+    #[cfg(target_os = "windows")]
+    {
+        let output = Command::new("netsh").args(["interface", "show", "interface"]).output();
+        let text = output.as_ref().map(|value| String::from_utf8_lossy(&value.stdout).to_ascii_lowercase()).unwrap_or_default();
+        let active = text.lines().any(|line| line.contains("wintun") || line.contains("mihomo") || line.contains("tun"));
+        return Ok(serde_json::json!({ "state": if active { "active" } else { "permission-required" }, "active": active, "device": true, "detail": if active { "TUN/Wintun 接口已创建" } else { "等待 Wintun 驱动或管理员权限" } }));
+    }
+    #[allow(unreachable_code)]
+    Ok(serde_json::json!({ "state": "unsupported", "active": false, "device": false, "detail": "当前平台不支持 TUN 探测" }))
+}
+
 fn restore_system_proxy(app: &tauri::AppHandle) {
     let path = match proxy_snapshot_path(app) { Ok(path) => path, Err(_) => return };
     if !path.exists() { return; }
@@ -258,7 +286,7 @@ pub fn run() {
             }
         }))
         .plugin(tauri_plugin_updater::Builder::new().build())
-        .invoke_handler(tauri::generate_handler![open_external_url, check_for_update, install_update, set_system_proxy, system_proxy_status])
+        .invoke_handler(tauri::generate_handler![open_external_url, check_for_update, install_update, set_system_proxy, system_proxy_status, tun_status])
         .manage(Backend(Mutex::new(None)))
         .setup(|app| {
             if cfg!(debug_assertions) {
