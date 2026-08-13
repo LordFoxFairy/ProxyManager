@@ -48,7 +48,7 @@ fn snapshot_system_proxy(app: &tauri::AppHandle) -> Result<(), String> {
         out.into_bytes()
     };
     #[cfg(target_os = "windows")]
-    let value = Command::new("netsh").args(["winhttp", "show", "proxy"]).output().map_err(|e| e.to_string())?.stdout;
+    let value = Command::new("reg").args(["query", "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings", "/v", "ProxyEnable", "/v", "ProxyServer"]).output().map_err(|e| e.to_string())?.stdout;
     #[allow(unreachable_code)]
     write(path, value).map_err(|e| e.to_string())
 }
@@ -85,6 +85,7 @@ async fn install_update(app: tauri::AppHandle) -> Result<serde_json::Value, Stri
     let Some(update) = update else { return Ok(serde_json::json!({ "available": false })); };
     let version = update.version.clone();
     update.download_and_install(|_, _| {}, || {}).await.map_err(|e| e.to_string())?;
+    app.request_restart();
     Ok(serde_json::json!({ "available": true, "installed": true, "version": version }))
 }
 
@@ -150,11 +151,18 @@ fn set_system_proxy(app: tauri::AppHandle, enabled: bool, port: u16) -> Result<(
     #[cfg(target_os = "windows")]
     {
         let snapshot = if !enabled { std::fs::read_to_string(proxy_snapshot_path(&app)?).unwrap_or_default() } else { String::new() };
-        let original = snapshot.lines().find_map(|line| line.strip_prefix("Proxy Server(s) :").map(str::trim)).filter(|value| !value.is_empty() && !value.eq_ignore_ascii_case("(none)"));
-        let value = if enabled { Some(format!("127.0.0.1:{}", port)) } else { original.map(str::to_string) };
-        let args = if let Some(proxy) = value.as_deref() { vec!["winhttp", "set", "proxy", proxy] } else { vec!["winhttp", "reset", "proxy"] };
-        let status = Command::new("netsh").args(args).status().map_err(|e| e.to_string())?;
-        if !status.success() { return Err("Windows 系统代理设置失败".into()); }
+        let original_enabled = snapshot.lines().find_map(|line| line.split_once("REG_DWORD").map(|(_, value)| value.trim())).unwrap_or("0");
+        let original_server = snapshot.lines().find_map(|line| line.split_once("REG_SZ").map(|(_, value)| value.trim())).unwrap_or("");
+        let proxy = if enabled { format!("127.0.0.1:{}", port) } else { original_server.to_string() };
+        let enable = if enabled { "1" } else { original_enabled };
+        let key = "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings";
+        let status = Command::new("reg").args(["add", key, "/v", "ProxyEnable", "/t", "REG_DWORD", "/d", enable, "/f"]).status().map_err(|e| e.to_string())?;
+        if !status.success() { return Err("Windows 用户代理开关设置失败".into()); }
+        if !proxy.is_empty() {
+            let status = Command::new("reg").args(["add", key, "/v", "ProxyServer", "/t", "REG_SZ", "/d", &proxy, "/f"]).status().map_err(|e| e.to_string())?;
+            if !status.success() { return Err("Windows 用户代理地址设置失败".into()); }
+        }
+        let _ = Command::new("netsh").args(["winhttp", "import", "proxy", "source=ie"]).status();
         return Ok(());
     }
     #[allow(unreachable_code)]
@@ -182,9 +190,9 @@ fn system_proxy_status() -> Result<bool, String> {
     }
     #[cfg(target_os = "windows")]
     {
-        let output = Command::new("netsh").args(["winhttp", "show", "proxy"]).output().map_err(|e| e.to_string())?;
+        let output = Command::new("reg").args(["query", "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings", "/v", "ProxyEnable"]).output().map_err(|e| e.to_string())?;
         let text = String::from_utf8_lossy(&output.stdout).to_ascii_lowercase();
-        return Ok(!text.contains("direct access") && !text.contains("no proxy"));
+        return Ok(text.contains("0x1"));
     }
     #[allow(unreachable_code)]
     Err("当前平台不支持读取系统代理状态".into())
