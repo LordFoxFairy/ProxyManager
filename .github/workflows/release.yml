@@ -65,6 +65,23 @@ jobs:
       - name: Build bundled backend
         run: pnpm --dir server bundle
 
+      - name: Bundle Node runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION=22.14.0
+          mkdir -p runtime/node
+          case "${{ runner.os }}-${{ runner.arch }}" in
+            macOS-ARM64) ARCHIVE="node-v${VERSION}-darwin-arm64.tar.gz"; DIR="node-v${VERSION}-darwin-arm64" ;;
+            macOS-X64) ARCHIVE="node-v${VERSION}-darwin-x64.tar.gz"; DIR="node-v${VERSION}-darwin-x64" ;;
+            Linux-X64) ARCHIVE="node-v${VERSION}-linux-x64.tar.xz"; DIR="node-v${VERSION}-linux-x64" ;;
+            Windows-X64) ARCHIVE="node-v${VERSION}-win-x64.zip"; DIR="node-v${VERSION}-win-x64" ;;
+            *) echo "Unsupported runner: ${{ runner.os }}-${{ runner.arch }}"; exit 1 ;;
+          esac
+          curl -fsSL "https://nodejs.org/dist/v${VERSION}/${ARCHIVE}" -o "/tmp/${ARCHIVE}"
+          if [[ "${ARCHIVE}" == *.zip ]]; then 7z x "/tmp/${ARCHIVE}" -o/tmp/node-runtime >/dev/null; else mkdir -p /tmp/node-runtime; tar -xf "/tmp/${ARCHIVE}" -C /tmp/node-runtime; fi
+          cp -R "/tmp/node-runtime/${DIR}/." runtime/node/
+
       - name: Build and publish Tauri installer
         uses: tauri-apps/tauri-action@v0
         env:

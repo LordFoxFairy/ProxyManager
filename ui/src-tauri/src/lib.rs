@@ -78,12 +78,11 @@ fn spawn_backend(app: &tauri::AppHandle) -> Option<Child> {
         c.args(["tsx", "src/cli.ts", "serve"]).current_dir(root);
         c
     } else {
-        // Packaged: run the compiled server bundled under resources/. Node is a
-        // runtime dependency rather than an embedded binary -- better-sqlite3 is
-        // a native module, so a single-file build would need per-platform
-        // prebuilds. The UI surfaces a clear error if the backend never answers.
+        // Packaged: use the platform Node runtime shipped as a Tauri resource.
         let script = app.path().resource_dir().ok()?.join("server/cli.js");
-        let mut c = Command::new("node");
+        let node_name = if cfg!(target_os = "windows") { "node.exe" } else { "bin/node" };
+        let node = app.path().resource_dir().ok()?.join("runtime/node").join(node_name);
+        let mut c = Command::new(node);
         c.arg(script).arg("serve");
         c
     };

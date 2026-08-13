@@ -29,7 +29,8 @@
     "active": true,
     "targets": "all",
     "resources": {
-      "../../server/bundle/": "server/"
+      "../../server/bundle/": "server/",
+      "../../runtime/node/": "runtime/node/"
     },
     "icon": [
       "icons/32x32.png",
