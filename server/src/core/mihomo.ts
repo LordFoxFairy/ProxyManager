@@ -10,10 +10,11 @@ import { getSetting } from './store.js';
 
 export interface MihomoProxy {
   name: string;
-  type: 'http' | 'socks5';
+  type: string;
   server: string;
   port: number;
-  udp: boolean;
+  udp?: boolean;
+  [key: string]: unknown;
 }
 
 export interface MihomoConfig {
@@ -43,7 +44,9 @@ export interface MihomoConnection {
 }
 
 function nodeToMihomo(proxy: Proxy, index: number): MihomoProxy | null {
-  const [server, portText] = proxy.addr.split(':');
+  const separator = proxy.addr.lastIndexOf(':');
+  const server = proxy.addr.slice(0, separator).replace(/^\[|\]$/g, '');
+  const portText = proxy.addr.slice(separator + 1);
   const port = Number(portText);
   if (!server || !Number.isInteger(port) || port < 1 || port > 65535) return null;
   return { name: `POOL-${index + 1}-${proxy.country ?? 'XX'}`, type: proxy.scheme === 'socks5' ? 'socks5' : 'http', server, port, udp: false };
@@ -51,7 +54,7 @@ function nodeToMihomo(proxy: Proxy, index: number): MihomoProxy | null {
 
 export function buildMihomoConfig(config: RuntimeConfig, controller = '127.0.0.1:9090', secret = '', nodes: Proxy[] = get({ n: 200, minScore: 1, https: true })): MihomoConfig {
   const proxies = nodes.map(nodeToMihomo).filter((node): node is MihomoProxy => Boolean(node));
-  const external = providerNodes().filter((node) => node.type === 'http' || node.type === 'socks5').map((node) => ({ ...node, udp: false })) as MihomoProxy[];
+  const external = providerNodes().map((node) => ({ ...node, udp: node.udp === true })) as MihomoProxy[];
   const merged = [...new Map([...proxies, ...external].map((node) => [node.name, node])).values()];
   const names = merged.map((proxy) => proxy.name);
   const available = new Set([...names, 'DIRECT']);

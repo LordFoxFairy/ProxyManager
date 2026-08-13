@@ -1,7 +1,8 @@
 import { getSetting, setSetting } from './store.js';
 
 export type ProviderKind = 'subscription' | 'fixed' | 'pool';
-export interface ProviderNode { name: string; type: string; server: string; port: number; [key: string]: unknown; }
+export type ProviderNodeType = 'http' | 'socks5' | 'ss' | 'vmess' | 'vless' | 'trojan' | 'hysteria2' | 'tuic' | 'wireguard';
+export interface ProviderNode { name: string; type: ProviderNodeType; server: string; port: number; [key: string]: unknown; }
 export interface Provider { id: string; name: string; kind: ProviderKind; url: string | null; enabled: boolean; nodes: ProviderNode[]; updatedAt: number | null; lastError: string | null; }
 const KEY = 'providers.catalog';
 const read = (): Provider[] => { try { const value = JSON.parse(getSetting(KEY) ?? '[]'); return Array.isArray(value) ? value : []; } catch { return []; } };
@@ -19,11 +20,37 @@ export function upsertProvider(input: unknown): Provider {
   write([...current.filter((item) => item.id !== provider.id), provider]); return provider;
 }
 export function removeProvider(id: string): boolean { const current = read(); const next = current.filter((item) => item.id !== id); if (next.length === current.length) return false; write(next); return true; }
-function normalizeNodes(input: unknown[]): ProviderNode[] { return input.map((item) => { const row = item && typeof item === 'object' ? item as Record<string, unknown> : {}; const port = Number(row.port); const type = String(row.type ?? 'http').toLowerCase(); if (!row.name || !row.server || !Number.isInteger(port) || port < 1 || port > 65535 || !['http', 'socks5'].includes(type)) return null; return { ...row, name: String(row.name).slice(0, 120), type, server: String(row.server).trim().slice(0, 255), port } as ProviderNode; }).filter((item): item is ProviderNode => Boolean(item)).slice(0, 500); }
-function valueOf(block: string, key: string) { return block.match(new RegExp(`(?:^|\\n)\\s*${key}\\s*:\\s*["']?([^"'\\n]+)`))?.[1]?.trim(); }
+const NODE_TYPES = new Set<ProviderNodeType>(['http', 'socks5', 'ss', 'vmess', 'vless', 'trojan', 'hysteria2', 'tuic', 'wireguard']);
+function normalizeNodes(input: unknown[]): ProviderNode[] { return input.map((item) => { const row = item && typeof item === 'object' ? item as Record<string, unknown> : {}; const port = Number(row.port); const type = String(row.type ?? 'http').toLowerCase() as ProviderNodeType; if (!row.name || !row.server || !Number.isInteger(port) || port < 1 || port > 65535 || !NODE_TYPES.has(type)) return null; return { ...row, name: String(row.name).slice(0, 120), type, server: String(row.server).trim().slice(0, 255), port } as ProviderNode; }).filter((item): item is ProviderNode => Boolean(item)).slice(0, 500); }
+function yamlValue(value: string): unknown {
+  const clean = value.trim().replace(/\s+#.*$/, '');
+  if ((clean.startsWith('"') && clean.endsWith('"')) || (clean.startsWith("'") && clean.endsWith("'"))) return clean.slice(1, -1);
+  if (clean === 'true' || clean === 'false') return clean === 'true';
+  if (/^-?\d+(?:\.\d+)?$/.test(clean)) return Number(clean);
+  return clean;
+}
+function parseYamlBlock(block: string): Record<string, unknown> | null {
+  const row: Record<string, unknown> = {};
+  for (const [index, line] of block.split(/\r?\n/).entries()) {
+    const match = index === 0
+      ? /^\s*-\s*([A-Za-z0-9_-]+)\s*:\s*(.*)$/.exec(line)
+      : /^\s{2,}([A-Za-z0-9_-]+)\s*:\s*(.*)$/.exec(line);
+    const key = match?.[1];
+    const raw = match?.[2];
+    if (!key || !raw?.trim() || raw.trim() === 'null') continue;
+    row[key] = yamlValue(raw);
+  }
+  const name = row.name;
+  const type = row.type;
+  const server = row.server;
+  const port = row.port;
+  return typeof name === 'string' && typeof type === 'string' && typeof server === 'string' && typeof port === 'number'
+    ? row
+    : null;
+}
 function decodeBase64(text: string): string | null { try { const decoded = Buffer.from(text.trim(), 'base64').toString('utf8'); return decoded.includes('://') || decoded.includes('proxies:') ? decoded : null; } catch { return null; } }
-function parseUri(line: string): ProviderNode | null { try { const url = new URL(line.trim()); const port = Number(url.port); const scheme = url.protocol.replace(':', '').toLowerCase(); const type = scheme === 'socks5' || scheme === 'http' ? scheme : ''; if (!url.hostname || !Number.isInteger(port) || port < 1 || port > 65535 || !type) return null; return { name: decodeURIComponent(url.hash.slice(1)) || `${type}-${url.hostname}:${port}`, type, server: url.hostname, port }; } catch { return null; } }
-function parseText(text: string): ProviderNode[] { let value: unknown = null; try { value = JSON.parse(text); } catch {} if (value && typeof value === 'object' && Array.isArray((value as Record<string, unknown>).proxies)) return normalizeNodes((value as Record<string, unknown>).proxies as unknown[]); const source = decodeBase64(text) ?? text; const uriNodes = source.split(/\r?\n/).map(parseUri).filter((node): node is ProviderNode => Boolean(node)); if (uriNodes.length) return uriNodes; return normalizeNodes(source.split(/\n(?=\s*-\s*name\s*:)/).map((block) => { const name = valueOf(block, 'name'); const type = valueOf(block, 'type'); const server = valueOf(block, 'server'); const port = Number(valueOf(block, 'port')); return name && type && server && Number.isInteger(port) ? { name, type, server, port } : null; })); }
+function parseUri(line: string): ProviderNode | null { try { const raw = line.trim(); if (raw.startsWith('vmess://')) { const decoded = Buffer.from(raw.slice(8), 'base64').toString('utf8'); const row = JSON.parse(decoded) as Record<string, unknown>; return normalizeNodes([{ ...row, name: row.ps ?? row.name, type: 'vmess', server: row.add ?? row.server, port: row.port }])[0] ?? null; } const url = new URL(raw); const port = Number(url.port); const scheme = url.protocol.replace(':', '').toLowerCase() as ProviderNodeType; if (!url.hostname || !Number.isInteger(port) || port < 1 || port > 65535 || !NODE_TYPES.has(scheme)) return null; const node: Record<string, unknown> = { name: decodeURIComponent(url.hash.slice(1)) || `${scheme}-${url.hostname}:${port}`, type: scheme, server: url.hostname, port }; if (url.username) node.uuid = decodeURIComponent(url.username); if (url.password) node.password = decodeURIComponent(url.password); for (const [key, value] of url.searchParams) node[key] = value; return normalizeNodes([node])[0] ?? null; } catch { return null; } }
+function parseText(text: string): ProviderNode[] { let value: unknown = null; try { value = JSON.parse(text); } catch {} if (value && typeof value === 'object' && Array.isArray((value as Record<string, unknown>).proxies)) return normalizeNodes((value as Record<string, unknown>).proxies as unknown[]); const source = decodeBase64(text) ?? text; const uriNodes = source.split(/\r?\n/).map(parseUri).filter((node): node is ProviderNode => Boolean(node)); if (uriNodes.length) return uriNodes; return normalizeNodes(source.split(/\n(?=\s*-\s*name\s*:)/).map(parseYamlBlock).filter((row): row is Record<string, unknown> => Boolean(row))); }
 export async function refreshProvider(id: string): Promise<Provider> {
   const provider = read().find((item) => item.id === id);
   if (!provider) throw new Error('Provider 不存在');
