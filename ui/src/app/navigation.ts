@@ -1,8 +1,9 @@
-import { Activity, Boxes, Gauge, Route, ScanSearch, Waypoints } from 'lucide-react';
+import { Activity, Boxes, Gauge, Layers3, Route, ScanSearch, Waypoints } from 'lucide-react';
 import type { NavigationItem } from './types';
 
 export const NAVIGATION: NavigationItem[] = [
   { id: 'overview', label: '总览', icon: Gauge },
+  { id: 'groups', label: '代理组', icon: Layers3 },
   { id: 'routing', label: '路由', icon: Route },
   { id: 'connections', label: '连接', icon: Waypoints },
   { id: 'resources', label: '资源', icon: Boxes },

@@ -170,6 +170,13 @@ export const saveProvider = (provider: Partial<Provider>) => req<Provider>('/pro
 export const patchProvider = (id: string, patch: Partial<Provider>) => req<Provider>(`/providers/${encodeURIComponent(id)}`, { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify(patch) });
 export const refreshProvider = (id: string) => req<Provider>(`/providers/${encodeURIComponent(id)}/refresh`, { method: 'POST' });
 
+export type GroupKind = 'select' | 'url-test' | 'fallback' | 'load-balance';
+export interface ProxyGroup { id: string; name: string; kind: GroupKind; members: string[]; url: string; interval: number; tolerance: number; enabled: boolean; }
+export const getGroups = () => req<{ groups: ProxyGroup[] }>('/groups');
+export const saveGroup = (group: Partial<ProxyGroup>) => req<ProxyGroup>('/groups', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(group) });
+export const patchGroup = (id: string, patch: Partial<ProxyGroup>) => req<ProxyGroup>(`/groups/${encodeURIComponent(id)}`, { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify(patch) });
+export const removeGroup = (id: string) => req<{ deleted: string }>(`/groups/${encodeURIComponent(id)}`, { method: 'DELETE' });
+
 export interface AutomationSettings {
   enabled: boolean;
   autoPurgeEnabled: boolean;

@@ -1,6 +1,6 @@
 import type { LucideIcon } from 'lucide-react';
 
-export type Page = 'overview' | 'routing' | 'connections' | 'resources' | 'diagnostics' | 'activity';
+export type Page = 'overview' | 'groups' | 'routing' | 'connections' | 'resources' | 'diagnostics' | 'activity';
 export type ResourceView = 'nodes' | 'providers';
 export type RunKind = 'validate' | 'collect' | 'source';
 
