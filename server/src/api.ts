@@ -130,7 +130,21 @@ app.get('/runtime/config-preview', (c) => {
   return c.json({ valid: errors.length === 0, errors, config: buildMihomoConfig(config) });
 });
 app.get('/config/export', (c) => c.json(exportConfigBundle()));
-app.post('/config/import', async (c) => { let body: unknown = {}; try { body = await c.req.json(); } catch {} try { const bundle = importConfigBundle(body); await reloadMihomoIfRunning(); return c.json(bundle); } catch (error) { return c.json({ error: error instanceof Error ? error.message : '配置导入失败' }, 400); } });
+app.post('/config/import', async (c) => {
+  let body: unknown = {};
+  try { body = await c.req.json(); } catch {}
+  const backup = exportConfigBundle();
+  try {
+    const bundle = importConfigBundle(body);
+    await reloadMihomoIfRunning();
+    return c.json(bundle);
+  } catch (error) {
+    // Import can succeed while the runtime rejects the generated config. Restore
+    // the complete pre-import bundle so the control plane and sidecar converge.
+    try { importConfigBundle(backup); } catch { /* preserve the original error */ }
+    return c.json({ error: error instanceof Error ? error.message : '配置导入失败' }, 400);
+  }
+});
 app.get('/providers', (c) => c.json({ providers: listProviders() }));
 app.post('/providers', async (c) => { let body: unknown = {}; try { body = await c.req.json(); } catch {} const provider = upsertProvider(body); await reloadMihomoIfRunning(); return c.json(provider); });
 app.patch('/providers/:id', async (c) => { let body: unknown = {}; try { body = await c.req.json(); } catch {} const provider = upsertProvider({ ...(body as object), id: c.req.param('id') }); await reloadMihomoIfRunning(); return c.json(provider); });

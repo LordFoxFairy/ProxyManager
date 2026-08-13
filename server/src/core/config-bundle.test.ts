@@ -27,6 +27,7 @@ test('legacy bundle without optional policy fields remains importable', () => {
   const legacy = { ...current } as Record<string, unknown>;
   delete legacy.automation;
   delete legacy.routing;
+  delete legacy.ruleProviderSnapshots;
   assert.doesNotThrow(() => bundle.importConfigBundle(legacy));
 });
 

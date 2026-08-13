@@ -23,11 +23,11 @@ export function importConfigBundle(input: unknown): ConfigBundle {
   try {
     updateRuntimeConfig(row.runtime); if (row.automation) updateAutomationSettings(row.automation); if (row.routing) updateGatewayRouting(row.routing);
     if (row.customConnectivityTargets) replaceCustomConnectivityTargets(row.customConnectivityTargets);
-    replaceProviders(row.providers!); replaceGroups(row.groups!); replaceRules(row.rules!); replaceRuleProviders(row.ruleProviders!); replaceRuleProviderSnapshots(row.ruleProviderSnapshots ?? {});
+    replaceProviders(row.providers!); replaceGroups(row.groups!); replaceRules(row.rules!); replaceRuleProviders(row.ruleProviders!); if (row.ruleProviderSnapshots !== undefined) replaceRuleProviderSnapshots(row.ruleProviderSnapshots);
     return exportConfigBundle();
   } catch (error) {
     updateRuntimeConfig(backup.runtime); updateAutomationSettings(backup.automation); updateGatewayRouting(backup.routing);
-    replaceCustomConnectivityTargets(backup.customConnectivityTargets); replaceProviders(backup.providers); replaceGroups(backup.groups); replaceRules(backup.rules); replaceRuleProviders(backup.ruleProviders); replaceRuleProviderSnapshots(backup.ruleProviderSnapshots ?? {});
+    replaceCustomConnectivityTargets(backup.customConnectivityTargets); replaceProviders(backup.providers); replaceGroups(backup.groups); replaceRules(backup.rules); replaceRuleProviders(backup.ruleProviders); if (backup.ruleProviderSnapshots !== undefined) replaceRuleProviderSnapshots(backup.ruleProviderSnapshots);
     throw error;
   }
 }
