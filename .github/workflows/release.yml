@@ -72,6 +72,13 @@ jobs:
           if [[ "$VERSION" == "$GITHUB_REF_NAME" ]]; then VERSION="0.1.0"; fi
           VERSION="$VERSION" node -e "const fs=require('fs'); for (const file of ['server/package.json','ui/package.json','ui/src-tauri/tauri.conf.json']) { const data=JSON.parse(fs.readFileSync(file)); data.version=process.env.VERSION; fs.writeFileSync(file, JSON.stringify(data,null,2)+'\\n'); }"
 
+      - name: Materialize updater public key
+        shell: bash
+        run: |
+          set -euo pipefail
+          TAURI_UPDATER_PUBKEY="$TAURI_UPDATER_PUBKEY" node -e "const fs=require('fs'); const file='ui/src-tauri/tauri.conf.json'; const data=JSON.parse(fs.readFileSync(file)); data.plugins ??= {}; data.plugins.updater ??= {}; data.plugins.updater.pubkey=process.env.TAURI_UPDATER_PUBKEY; fs.writeFileSync(file, JSON.stringify(data,null,2)+'\\n');"
+          test "$(node -p "JSON.parse(require('fs').readFileSync('ui/src-tauri/tauri.conf.json')).plugins.updater.pubkey")" = "$TAURI_UPDATER_PUBKEY"
+
       - name: Build bundled backend
         run: pnpm --dir server bundle
 
@@ -153,4 +160,3 @@ jobs:
             This release includes the bundled control plane and Tauri desktop shell.
           releaseDraft: false
           prerelease: false
-          args: "--config {\"plugins\":{\"updater\":{\"pubkey\":\"${{ secrets.TAURI_UPDATER_PUBKEY }}\"}}}"
