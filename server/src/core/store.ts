@@ -263,6 +263,10 @@ export function setSetting(key: string, value: string): void {
     .run(key, value);
 }
 
+export function removeSetting(key: string): void {
+  conn().prepare('DELETE FROM app_settings WHERE key = ?').run(key);
+}
+
 export interface ConnectivityPatch {
   id: string;
   name: string;
