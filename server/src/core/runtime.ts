@@ -2,6 +2,7 @@ import { getSetting, setSetting } from './store.js';
 import { mihomo } from './mihomo.js';
 import { createConnection } from 'node:net';
 import { existsSync } from 'node:fs';
+import { createSocket } from 'node:dgram';
 
 export type RuntimeKind = 'builtin' | 'mihomo';
 export type RuntimeLifecycle = 'stopped' | 'running' | 'degraded' | 'error';
@@ -153,13 +154,32 @@ function requireTunDevice() {
 function tcpProbe(address: string, timeoutMs = 700): Promise<boolean> {
   const match = address.match(/^\[?([^\]]+)\]?:([0-9]+)$/);
   if (!match) return Promise.resolve(false);
-  const host = match[1] === '0.0.0.0' || match[1] === '::' ? '127.0.0.1' : match[1];
+  const host = (match[1] === '0.0.0.0' || match[1] === '::' ? '127.0.0.1' : match[1])!;
   const port = Number(match[2]);
   return new Promise((resolve) => {
     const socket = createConnection({ host, port });
     const timer = setTimeout(() => { socket.destroy(); resolve(false); }, timeoutMs);
     socket.once('connect', () => { clearTimeout(timer); socket.destroy(); resolve(true); });
     socket.once('error', () => { clearTimeout(timer); resolve(false); });
+  });
+}
+
+function dnsProbe(address: string, timeoutMs = 1000): Promise<boolean> {
+  const match = address.match(/^\[?([^\]]+)\]?:([0-9]+)$/);
+  if (!match) return Promise.resolve(false);
+  const host = (match[1] === '0.0.0.0' || match[1] === '::' ? '127.0.0.1' : match[1])!;
+  const port = Number(match[2]);
+  const socket = createSocket(host.includes(':') ? 'udp6' : 'udp4');
+  const id = Math.floor(Math.random() * 0xffff);
+  const name = Buffer.from([7, 101, 120, 97, 109, 112, 108, 101, 3, 99, 111, 109, 0]);
+  const packet = Buffer.concat([Buffer.from([(id >> 8) & 255, id & 255, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0]), name, Buffer.from([0, 1, 0, 1])]);
+  return new Promise((resolve) => {
+    let settled = false;
+    const finish = (value: boolean) => { if (settled) return; settled = true; clearTimeout(timer); socket.close(); resolve(value); };
+    const timer = setTimeout(() => finish(false), timeoutMs);
+    socket.on('message', (message) => finish(message.length >= 12 && message[0] === packet[0] && message[1] === packet[1] && (message[3]! & 0x0f) !== 0));
+    socket.on('error', () => finish(false));
+    socket.send(packet, port, host, (error) => { if (error) finish(false); });
   });
 }
 
@@ -171,10 +191,12 @@ export async function probeRuntimeStatus(): Promise<RuntimeStatus> {
   const controller = base.controller ?? process.env.PM_MIHOMO_CONTROLLER ?? '127.0.0.1:9090';
   let controllerOk = false;
   try {
-    const response = await fetch(`http://${controller}/version`, { signal: AbortSignal.timeout(1000) });
+    const headers: Record<string, string> = {};
+    if (process.env.PM_MIHOMO_SECRET) headers.authorization = `Bearer ${process.env.PM_MIHOMO_SECRET}`;
+    const response = await fetch(`http://${controller}/version`, { signal: AbortSignal.timeout(1000), headers });
     controllerOk = response.ok;
   } catch { /* controller is not reachable */ }
-  const dnsOk = config.dns ? await tcpProbe(config.dnsListen) : false;
+  const dnsOk = config.dns ? await dnsProbe(config.dnsListen) : false;
   return {
     ...base,
     features: {

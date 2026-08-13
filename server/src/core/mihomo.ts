@@ -126,7 +126,9 @@ export class MihomoController {
     const directory = process.env.PM_MIHOMO_DIR ?? join(process.cwd(), '.runtime', 'mihomo');
     await mkdir(directory, { recursive: true });
     this.configPath = join(directory, 'config.json');
-    await writeFile(this.configPath, JSON.stringify(buildMihomoConfig(config), null, 2), 'utf8');
+    const controller = process.env.PM_MIHOMO_CONTROLLER ?? '127.0.0.1:9090';
+    const secret = process.env.PM_MIHOMO_SECRET ?? '';
+    await writeFile(this.configPath, JSON.stringify(buildMihomoConfig(config, controller, secret), null, 2), 'utf8');
     this.lastError = null;
     this.child = spawn(binary, ['-d', directory, '-f', this.configPath], { stdio: ['ignore', 'pipe', 'pipe'] });
     this.recentLogs = [];

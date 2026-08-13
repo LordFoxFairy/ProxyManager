@@ -18,6 +18,11 @@ test('builds a conservative mihomo config with loopback controller', () => {
   assert.deepEqual(built.rules, ['MATCH,PROXY']);
 });
 
+test('preserves controller authentication in generated config', () => {
+  const built = buildMihomoConfig(config, '127.0.0.1:9090', 'TEST_SECRET', []);
+  assert.equal(built.secret, 'TEST_SECRET');
+});
+
 test('rejects duplicate runtime ports before starting mihomo', () => {
   assert.deepEqual(validateMihomoConfig({ ...config, socksPort: config.mixedPort }), ['mixed/http/socks 端口不能重复']);
 });
