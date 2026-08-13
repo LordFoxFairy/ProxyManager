@@ -199,8 +199,19 @@ function useProxyManagerState() {
   }, [load]);
 
   useEffect(() => {
-    void invoke<boolean>('system_proxy_status').then(setSystemProxyActual).catch(() => setSystemProxyActual(null));
-  }, [runtimeConfig?.systemProxy]);
+    let cancelled = false;
+    const check = async () => {
+      try {
+        const value = await invoke<boolean>('system_proxy_status');
+        if (!cancelled) setSystemProxyActual(value);
+      } catch {
+        if (!cancelled) setSystemProxyActual(null);
+      }
+    };
+    void check();
+    const timer = window.setInterval(() => void check(), 5000);
+    return () => { cancelled = true; window.clearInterval(timer); };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
