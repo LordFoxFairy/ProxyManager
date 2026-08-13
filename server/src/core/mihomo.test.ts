@@ -26,3 +26,9 @@ test('preserves controller authentication in generated config', () => {
 test('rejects duplicate runtime ports before starting mihomo', () => {
   assert.deepEqual(validateMihomoConfig({ ...config, socksPort: config.mixedPort }), ['mixed/http/socks 端口不能重复']);
 });
+
+test('reload is safe when mihomo is not running', async () => {
+  const { mihomo } = await import('./mihomo.js');
+  await mihomo.reload();
+  assert.equal(mihomo.running, false);
+});

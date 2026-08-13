@@ -99,6 +99,7 @@ export class MihomoController {
   private recoveryAttempts = 0;
   private recoveryTimer: NodeJS.Timeout | null = null;
   private recentLogs: string[] = [];
+  private reloadPromise: Promise<void> | null = null;
 
   get running() { return Boolean(this.child && this.child.exitCode === null); }
   get error() { return this.lastError; }
@@ -183,10 +184,18 @@ export class MihomoController {
   }
 
   async reload(): Promise<void> {
+    if (this.reloadPromise) return this.reloadPromise;
     if (!this.running) return;
-    const config = getRuntimeConfig();
-    await this.stop();
-    await this.start(config);
+    this.reloadPromise = (async () => {
+      const config = getRuntimeConfig();
+      await this.stop();
+      await this.start(config);
+    })();
+    try {
+      await this.reloadPromise;
+    } finally {
+      this.reloadPromise = null;
+    }
   }
 
   private scheduleRecovery(config: RuntimeConfig) {
