@@ -6,6 +6,7 @@ import { get, type Proxy } from './store.js';
 import { providerNodes } from './providers.js';
 import { listGroups } from './groups.js';
 import { listRuleProviders, listRules } from './rules.js';
+import { getSetting } from './store.js';
 
 export interface MihomoProxy {
   name: string;
@@ -25,7 +26,7 @@ export interface MihomoConfig {
   proxies: MihomoProxy[];
   'proxy-groups': { name: string; type: string; proxies: string[]; url?: string; interval?: number; tolerance?: number }[];
   rules: string[];
-  'rule-providers'?: Record<string, { type: 'http'; behavior: 'domain' | 'classical' | 'ipcidr'; url: string; path: string; interval: number }>;
+  'rule-providers'?: Record<string, { type: 'http' | 'file'; behavior: 'domain' | 'classical' | 'ipcidr'; url?: string; path: string; interval?: number }>;
   dns?: { enable: true; listen: string; 'enhanced-mode': 'fake-ip' | 'redir-host'; nameserver: string[]; fallback: string[] };
   tun?: { enable: true; stack: 'system' | 'gvisor' | 'mixed'; 'auto-route': boolean; 'auto-detect-interface': boolean; 'dns-hijack': string[] };
 }
@@ -56,7 +57,12 @@ export function buildMihomoConfig(config: RuntimeConfig, controller = '127.0.0.1
   const available = new Set([...names, 'DIRECT']);
   const groups: MihomoConfig['proxy-groups'] = listGroups().filter((group) => group.enabled).map((group) => ({ name: group.name, type: group.kind, proxies: group.name === 'PROXY' ? [...names, ...group.members.filter((member) => member === 'DIRECT')] : group.members.filter((member) => available.has(member) || member === 'PROXY'), url: group.url, interval: group.interval, tolerance: group.tolerance }));
   if (!groups.some((group) => group.name === 'PROXY')) groups.unshift({ name: 'PROXY', type: 'select', proxies: [...names, 'DIRECT'] });
-  const ruleProviders = Object.fromEntries(listRuleProviders().filter((provider) => provider.enabled && provider.url).map((provider) => [provider.name, { type: 'http' as const, behavior: provider.behavior, url: provider.url, path: `./rule-providers/${provider.id}.yaml`, interval: provider.interval }]));
+  const ruleProviders = Object.fromEntries(listRuleProviders().filter((provider) => provider.enabled && provider.url).map((provider) => {
+    const hasSnapshot = Boolean(getSetting(`routing.rule-provider.snapshot.${provider.id}`));
+    return [provider.name, hasSnapshot
+      ? { type: 'file' as const, behavior: provider.behavior, path: `./rule-providers/${provider.id}.yaml` }
+      : { type: 'http' as const, behavior: provider.behavior, url: provider.url, path: `./rule-providers/${provider.id}.yaml`, interval: provider.interval }];
+  }));
   const providerRules = listRuleProviders().filter((provider) => provider.enabled && provider.url).map((provider) => `RULE-SET,${provider.name},PROXY`);
   return {
     'mixed-port': config.mixedPort,
@@ -128,6 +134,12 @@ export class MihomoController {
     this.configPath = join(directory, 'config.json');
     const controller = process.env.PM_MIHOMO_CONTROLLER ?? '127.0.0.1:9090';
     const secret = process.env.PM_MIHOMO_SECRET ?? '';
+    const ruleDirectory = join(directory, 'rule-providers');
+    await mkdir(ruleDirectory, { recursive: true });
+    for (const provider of listRuleProviders()) {
+      const snapshot = getSetting(`routing.rule-provider.snapshot.${provider.id}`);
+      if (snapshot) await writeFile(join(ruleDirectory, `${provider.id}.yaml`), snapshot, 'utf8');
+    }
     await writeFile(this.configPath, JSON.stringify(buildMihomoConfig(config, controller, secret), null, 2), 'utf8');
     this.lastError = null;
     this.child = spawn(binary, ['-d', directory, '-f', this.configPath], { stdio: ['ignore', 'pipe', 'pipe'] });
