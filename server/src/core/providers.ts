@@ -7,13 +7,16 @@ const KEY = 'providers.catalog';
 const read = (): Provider[] => { try { const value = JSON.parse(getSetting(KEY) ?? '[]'); return Array.isArray(value) ? value : []; } catch { return []; } };
 const write = (value: Provider[]) => setSetting(KEY, JSON.stringify(value));
 export function listProviders(): Provider[] { return read(); }
-export function replaceProviders(value: unknown[]): Provider[] { const next = value.map((item) => upsertProvider(item)); const ids = new Set(next.map((item) => item.id)); write(read().filter((item) => ids.has(item.id))); return next; }
-export function upsertProvider(input: unknown): Provider {
+function normalizeProvider(input: unknown, current: Provider[]): Provider {
   const row = input && typeof input === 'object' ? input as Record<string, unknown> : {};
   const id = String(row.id ?? `provider-${Date.now()}`).replace(/[^a-zA-Z0-9_-]/g, '-').slice(0, 64);
-  const current = read(); const previous = current.find((item) => item.id === id);
-  const provider: Provider = { id, name: String(row.name ?? previous?.name ?? id).slice(0, 80), kind: row.kind === 'fixed' ? 'fixed' : row.kind === 'pool' ? 'pool' : 'subscription', url: typeof row.url === 'string' && row.url.trim() ? row.url.trim().slice(0, 2048) : previous?.url ?? null, enabled: typeof row.enabled === 'boolean' ? row.enabled : previous?.enabled ?? true, nodes: Array.isArray(row.nodes) ? normalizeNodes(row.nodes) : previous?.nodes ?? [], updatedAt: typeof row.updatedAt === 'number' ? row.updatedAt : previous?.updatedAt ?? null, lastError: typeof row.lastError === 'string' ? row.lastError : previous?.lastError ?? null };
-  write([...current.filter((item) => item.id !== id), provider]); return provider;
+  const previous = current.find((item) => item.id === id);
+  return { id, name: String(row.name ?? previous?.name ?? id).slice(0, 80), kind: row.kind === 'fixed' ? 'fixed' : row.kind === 'pool' ? 'pool' : 'subscription', url: typeof row.url === 'string' && row.url.trim() ? row.url.trim().slice(0, 2048) : previous?.url ?? null, enabled: typeof row.enabled === 'boolean' ? row.enabled : previous?.enabled ?? true, nodes: Array.isArray(row.nodes) ? normalizeNodes(row.nodes) : previous?.nodes ?? [], updatedAt: typeof row.updatedAt === 'number' ? row.updatedAt : previous?.updatedAt ?? null, lastError: typeof row.lastError === 'string' ? row.lastError : previous?.lastError ?? null };
+}
+export function replaceProviders(value: unknown[]): Provider[] { const current = read(); const next = value.map((item) => normalizeProvider(item, current)); write(next); return next; }
+export function upsertProvider(input: unknown): Provider {
+  const current = read(); const provider = normalizeProvider(input, current);
+  write([...current.filter((item) => item.id !== provider.id), provider]); return provider;
 }
 export function removeProvider(id: string): boolean { const current = read(); const next = current.filter((item) => item.id !== id); if (next.length === current.length) return false; write(next); return true; }
 function normalizeNodes(input: unknown[]): ProviderNode[] { return input.map((item) => { const row = item && typeof item === 'object' ? item as Record<string, unknown> : {}; const port = Number(row.port); if (!row.name || !row.server || !Number.isInteger(port)) return null; return { ...row, name: String(row.name).slice(0, 120), type: String(row.type ?? 'http'), server: String(row.server), port } as ProviderNode; }).filter((item): item is ProviderNode => Boolean(item)).slice(0, 500); }

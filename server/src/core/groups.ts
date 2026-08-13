@@ -24,14 +24,17 @@ function read(): ProxyGroup[] {
 }
 function write(groups: ProxyGroup[]) { setSetting(KEY, JSON.stringify(groups)); }
 export function listGroups() { return read(); }
-export function replaceGroups(value: unknown[]): ProxyGroup[] { const next = value.map((item) => upsertGroup(item)); const ids = new Set(next.map((item) => item.id)); write(read().filter((item) => ids.has(item.id))); return next; }
-export function upsertGroup(input: unknown): ProxyGroup {
+function normalizeGroup(input: unknown, current: ProxyGroup[]): ProxyGroup {
   const row = input && typeof input === 'object' ? input as Record<string, unknown> : {};
   const id = String(row.id ?? `group-${Date.now()}`).replace(/[^a-zA-Z0-9_-]/g, '-').slice(0, 64);
-  const current = read(); const old = current.find((item) => item.id === id);
+  const old = current.find((item) => item.id === id);
   const kind: GroupKind = row.kind === 'url-test' || row.kind === 'fallback' || row.kind === 'load-balance' ? row.kind : 'select';
-  const group: ProxyGroup = { id, name: String(row.name ?? old?.name ?? id).slice(0, 80), kind, members: Array.isArray(row.members) ? row.members.map(String).slice(0, 500) : old?.members ?? ['DIRECT'], url: typeof row.url === 'string' ? row.url : old?.url ?? defaults[0]!.url, interval: integer(row.interval, old?.interval ?? 300, 30, 86400), tolerance: integer(row.tolerance, old?.tolerance ?? 300, 0, 10000), enabled: typeof row.enabled === 'boolean' ? row.enabled : old?.enabled ?? true };
-  write([...current.filter((item) => item.id !== id), group]); return group;
+  return { id, name: String(row.name ?? old?.name ?? id).slice(0, 80), kind, members: Array.isArray(row.members) ? row.members.map(String).slice(0, 500) : old?.members ?? ['DIRECT'], url: typeof row.url === 'string' ? row.url : old?.url ?? defaults[0]!.url, interval: integer(row.interval, old?.interval ?? 300, 30, 86400), tolerance: integer(row.tolerance, old?.tolerance ?? 300, 0, 10000), enabled: typeof row.enabled === 'boolean' ? row.enabled : old?.enabled ?? true };
+}
+export function replaceGroups(value: unknown[]): ProxyGroup[] { const current = read(); const next = value.map((item) => normalizeGroup(item, current)); write(next); return next; }
+export function upsertGroup(input: unknown): ProxyGroup {
+  const current = read(); const group = normalizeGroup(input, current);
+  write([...current.filter((item) => item.id !== group.id), group]); return group;
 }
 export function removeGroup(id: string) { if (id === 'proxy') return false; const current = read(); const next = current.filter((item) => item.id !== id); if (next.length === current.length) return false; write(next); return true; }
 function integer(value: unknown, fallback: number, min: number, max: number) { const parsed = Number(value); return Number.isFinite(parsed) ? Math.max(min, Math.min(max, Math.round(parsed))) : fallback; }
