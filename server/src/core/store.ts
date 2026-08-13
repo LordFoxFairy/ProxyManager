@@ -267,6 +267,10 @@ export function removeSetting(key: string): void {
   conn().prepare('DELETE FROM app_settings WHERE key = ?').run(key);
 }
 
+export function listSettingKeys(prefix: string): string[] {
+  return (conn().prepare('SELECT key FROM app_settings WHERE key LIKE ?').all(`${prefix}%`) as { key: string }[]).map((row) => row.key);
+}
+
 export interface ConnectivityPatch {
   id: string;
   name: string;

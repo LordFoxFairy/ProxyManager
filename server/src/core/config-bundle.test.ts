@@ -29,3 +29,15 @@ test('legacy bundle without optional policy fields remains importable', () => {
   delete legacy.routing;
   assert.doesNotThrow(() => bundle.importConfigBundle(legacy));
 });
+
+test('config bundle restores rule provider snapshots and removes stale snapshots', () => {
+  rules.upsertRuleProvider({ id: 'rules-a', name: 'A', url: 'https://example.test/a', behavior: 'domain' });
+  rules.upsertRuleProvider({ id: 'rules-b', name: 'B', url: 'https://example.test/b', behavior: 'domain' });
+  rules.replaceRuleProviderSnapshots({ 'rules-a': 'a.example', 'rules-b': 'b.example' });
+  const exported = bundle.exportConfigBundle();
+  assert.deepEqual(exported.ruleProviderSnapshots, { 'rules-a': 'a.example', 'rules-b': 'b.example' });
+
+  const trimmed = { ...exported, ruleProviders: exported.ruleProviders.filter((item) => item.id === 'rules-a'), ruleProviderSnapshots: { 'rules-a': 'restored.example' } };
+  bundle.importConfigBundle(trimmed);
+  assert.deepEqual(rules.listRuleProviderSnapshots(), { 'rules-a': 'restored.example' });
+});
