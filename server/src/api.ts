@@ -91,6 +91,20 @@ const reloadMihomoIfRunning = async () => {
   await applyRuntimeAction('restart');
   return getRuntimeStatus();
 };
+async function commitConfigChange<T>(mutate: () => T): Promise<{ value?: T; error?: unknown }> {
+  const backup = exportConfigBundle();
+  try {
+    const value = mutate();
+    await reloadMihomoIfRunning();
+    return { value };
+  } catch (error) {
+    try {
+      importConfigBundle(backup);
+      await reloadMihomoIfRunning();
+    } catch { /* preserve the original runtime error */ }
+    return { error };
+  }
+}
 app.patch('/runtime', async (c) => {
   let body: unknown = {};
   try { body = await c.req.json(); } catch { /* return current state */ }
@@ -146,23 +160,23 @@ app.post('/config/import', async (c) => {
   }
 });
 app.get('/providers', (c) => c.json({ providers: listProviders() }));
-app.post('/providers', async (c) => { let body: unknown = {}; try { body = await c.req.json(); } catch {} const provider = upsertProvider(body); await reloadMihomoIfRunning(); return c.json(provider); });
-app.patch('/providers/:id', async (c) => { let body: unknown = {}; try { body = await c.req.json(); } catch {} const provider = upsertProvider({ ...(body as object), id: c.req.param('id') }); await reloadMihomoIfRunning(); return c.json(provider); });
-app.delete('/providers/:id', (c) => removeProvider(c.req.param('id')) ? c.json({ deleted: c.req.param('id') }) : c.json({ error: 'Provider 不存在' }, 404));
-app.post('/providers/:id/refresh', async (c) => { try { const provider = await refreshProvider(c.req.param('id')); await reloadMihomoIfRunning(); return c.json(provider); } catch (error) { return c.json({ error: error instanceof Error ? error.message : 'Provider 更新失败' }, 409); } });
+app.post('/providers', async (c) => { let body: unknown = {}; try { body = await c.req.json(); } catch {} const result = await commitConfigChange(() => upsertProvider(body)); return result.error ? c.json({ error: result.error instanceof Error ? result.error.message : 'Provider 保存失败' }, 409) : c.json(result.value); });
+app.patch('/providers/:id', async (c) => { let body: unknown = {}; try { body = await c.req.json(); } catch {} const result = await commitConfigChange(() => upsertProvider({ ...(body as object), id: c.req.param('id') })); return result.error ? c.json({ error: result.error instanceof Error ? result.error.message : 'Provider 保存失败' }, 409) : c.json(result.value); });
+app.delete('/providers/:id', async (c) => { const result = await commitConfigChange(() => removeProvider(c.req.param('id'))); if (result.error) return c.json({ error: result.error instanceof Error ? result.error.message : 'Provider 删除失败' }, 409); return result.value ? c.json({ deleted: c.req.param('id') }) : c.json({ error: 'Provider 不存在' }, 404); });
+app.post('/providers/:id/refresh', async (c) => { const backup = exportConfigBundle(); let provider; try { provider = await refreshProvider(c.req.param('id')); } catch (error) { return c.json({ error: error instanceof Error ? error.message : 'Provider 更新失败' }, 409); } try { await reloadMihomoIfRunning(); return c.json(provider); } catch (error) { try { importConfigBundle(backup); await reloadMihomoIfRunning(); } catch {} return c.json({ error: error instanceof Error ? error.message : 'Provider 更新失败' }, 409); } });
 app.get('/groups', (c) => c.json({ groups: listGroups() }));
-app.post('/groups', async (c) => { let body: unknown = {}; try { body = await c.req.json(); } catch {} const group = upsertGroup(body); await reloadMihomoIfRunning(); return c.json(group); });
-app.patch('/groups/:id', async (c) => { let body: unknown = {}; try { body = await c.req.json(); } catch {} const group = upsertGroup({ ...(body as object), id: c.req.param('id') }); await reloadMihomoIfRunning(); return c.json(group); });
-app.delete('/groups/:id', async (c) => { const deleted = removeGroup(c.req.param('id')); if (deleted) await reloadMihomoIfRunning(); return deleted ? c.json({ deleted: c.req.param('id') }) : c.json({ error: '代理组不存在或不可删除' }, 409); });
+app.post('/groups', async (c) => { let body: unknown = {}; try { body = await c.req.json(); } catch {} const result = await commitConfigChange(() => upsertGroup(body)); return result.error ? c.json({ error: result.error instanceof Error ? result.error.message : '代理组保存失败' }, 409) : c.json(result.value); });
+app.patch('/groups/:id', async (c) => { let body: unknown = {}; try { body = await c.req.json(); } catch {} const result = await commitConfigChange(() => upsertGroup({ ...(body as object), id: c.req.param('id') })); return result.error ? c.json({ error: result.error instanceof Error ? result.error.message : '代理组保存失败' }, 409) : c.json(result.value); });
+app.delete('/groups/:id', async (c) => { const result = await commitConfigChange(() => removeGroup(c.req.param('id'))); if (result.error) return c.json({ error: result.error instanceof Error ? result.error.message : '代理组删除失败' }, 409); return result.value ? c.json({ deleted: c.req.param('id') }) : c.json({ error: '代理组不存在或不可删除' }, 409); });
 app.get('/rules', (c) => c.json({ rules: listRules() }));
-app.post('/rules', async (c) => { let body: unknown = {}; try { body = await c.req.json(); } catch {} const rule = upsertRule(body); await reloadMihomoIfRunning(); return c.json(rule); });
-app.patch('/rules/:id', async (c) => { let body: unknown = {}; try { body = await c.req.json(); } catch {} const rule = upsertRule({ ...(body as object), id: c.req.param('id') }); await reloadMihomoIfRunning(); return c.json(rule); });
-app.delete('/rules/:id', async (c) => { const deleted = removeRule(c.req.param('id')); if (deleted) await reloadMihomoIfRunning(); return deleted ? c.json({ deleted: c.req.param('id') }) : c.json({ error: '规则不存在' }, 404); });
+app.post('/rules', async (c) => { let body: unknown = {}; try { body = await c.req.json(); } catch {} const result = await commitConfigChange(() => upsertRule(body)); return result.error ? c.json({ error: result.error instanceof Error ? result.error.message : '规则保存失败' }, 409) : c.json(result.value); });
+app.patch('/rules/:id', async (c) => { let body: unknown = {}; try { body = await c.req.json(); } catch {} const result = await commitConfigChange(() => upsertRule({ ...(body as object), id: c.req.param('id') })); return result.error ? c.json({ error: result.error instanceof Error ? result.error.message : '规则保存失败' }, 409) : c.json(result.value); });
+app.delete('/rules/:id', async (c) => { const result = await commitConfigChange(() => removeRule(c.req.param('id'))); if (result.error) return c.json({ error: result.error instanceof Error ? result.error.message : '规则删除失败' }, 409); return result.value ? c.json({ deleted: c.req.param('id') }) : c.json({ error: '规则不存在' }, 404); });
 app.get('/rule-providers', (c) => c.json({ providers: listRuleProviders() }));
 app.post('/rule-providers', async (c) => { let body: unknown = {}; try { body = await c.req.json(); } catch {} const provider = upsertRuleProvider(body); await reloadMihomoIfRunning(); return c.json(provider); });
 app.patch('/rule-providers/:id', async (c) => { let body: unknown = {}; try { body = await c.req.json(); } catch {} const provider = upsertRuleProvider({ ...(body as object), id: c.req.param('id') }); await reloadMihomoIfRunning(); return c.json(provider); });
-app.delete('/rule-providers/:id', async (c) => { const deleted = removeRuleProvider(c.req.param('id')); if (deleted) await reloadMihomoIfRunning(); return deleted ? c.json({ deleted: c.req.param('id') }) : c.json({ error: '规则 Provider 不存在' }, 404); });
-app.post('/rule-providers/:id/refresh', async (c) => { try { const provider = await refreshRuleProvider(c.req.param('id')); await reloadMihomoIfRunning(); return c.json(provider); } catch (error) { return c.json({ error: error instanceof Error ? error.message : '规则 Provider 更新失败' }, 409); } });
+app.delete('/rule-providers/:id', async (c) => { const result = await commitConfigChange(() => removeRuleProvider(c.req.param('id'))); if (result.error) return c.json({ error: result.error instanceof Error ? result.error.message : '规则 Provider 删除失败' }, 409); return result.value ? c.json({ deleted: c.req.param('id') }) : c.json({ error: '规则 Provider 不存在' }, 404); });
+app.post('/rule-providers/:id/refresh', async (c) => { const backup = exportConfigBundle(); let provider; try { provider = await refreshRuleProvider(c.req.param('id')); } catch (error) { return c.json({ error: error instanceof Error ? error.message : '规则 Provider 更新失败' }, 409); } try { await reloadMihomoIfRunning(); return c.json(provider); } catch (error) { try { importConfigBundle(backup); await reloadMihomoIfRunning(); } catch {} return c.json({ error: error instanceof Error ? error.message : '规则 Provider 更新失败' }, 409); } });
 
 app.post('/diagnostics/browser/session', (c) => {
   const session = createBrowserDiagnosticSession();
