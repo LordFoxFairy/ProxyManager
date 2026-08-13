@@ -30,7 +30,8 @@
     "targets": "all",
     "resources": {
       "../../server/bundle/": "server/",
-      "../../runtime/node/": "runtime/node/"
+      "../../runtime/node/": "runtime/node/",
+      "../../runtime/mihomo/": "runtime/mihomo/"
     },
     "icon": [
       "icons/32x32.png",

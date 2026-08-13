@@ -82,6 +82,23 @@ jobs:
           if [[ "${ARCHIVE}" == *.zip ]]; then 7z x "/tmp/${ARCHIVE}" -o/tmp/node-runtime >/dev/null; else mkdir -p /tmp/node-runtime; tar -xf "/tmp/${ARCHIVE}" -C /tmp/node-runtime; fi
           cp -R "/tmp/node-runtime/${DIR}/." runtime/node/
 
+      - name: Bundle Mihomo runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION=1.19.12
+          mkdir -p runtime/mihomo
+          case "${{ runner.os }}-${{ runner.arch }}" in
+            macOS-ARM64) ASSET="mihomo-darwin-arm64-v${VERSION}.gz" ;;
+            macOS-X64) ASSET="mihomo-darwin-amd64-v${VERSION}.gz" ;;
+            Linux-X64) ASSET="mihomo-linux-amd64-v${VERSION}.gz" ;;
+            Windows-X64) ASSET="mihomo-windows-amd64-v${VERSION}.zip" ;;
+            *) echo "Unsupported runner: ${{ runner.os }}-${{ runner.arch }}"; exit 1 ;;
+          esac
+          URL="https://github.com/MetaCubeX/mihomo/releases/download/v${VERSION}/${ASSET}"
+          curl -fsSL "$URL" -o "/tmp/${ASSET}"
+          if [[ "${ASSET}" == *.zip ]]; then 7z e "/tmp/${ASSET}" -o runtime/mihomo -y >/dev/null; else gzip -dc "/tmp/${ASSET}" > runtime/mihomo/mihomo; chmod +x runtime/mihomo/mihomo; fi
+
       - name: Build and publish Tauri installer
         uses: tauri-apps/tauri-action@v0
         env:

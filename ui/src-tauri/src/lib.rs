@@ -1,3 +1,4 @@
+use std::fs::{create_dir_all, OpenOptions};
 use std::process::{Child, Command, Stdio};
 use std::sync::Mutex;
 use tauri::Manager;
@@ -69,6 +70,12 @@ struct Backend(Mutex<Option<Child>>);
 /// `server/` directory; a packaged build uses the sidecar binary placed next to
 /// the app executable.
 fn spawn_backend(app: &tauri::AppHandle) -> Option<Child> {
+    let data_dir = app.path().app_data_dir().ok()?;
+    create_dir_all(&data_dir).ok()?;
+    let db_path = data_dir.join("pool.db");
+    let log_path = data_dir.join("backend.log");
+    let log = OpenOptions::new().create(true).append(true).open(log_path).ok()?;
+    let log_err = log.try_clone().ok()?;
     let mut cmd = if cfg!(debug_assertions) {
         let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
             .parent()
@@ -87,7 +94,14 @@ fn spawn_backend(app: &tauri::AppHandle) -> Option<Child> {
         c
     };
 
-    match cmd.stdout(Stdio::null()).stderr(Stdio::null()).spawn() {
+    let mihomo = app.path().resource_dir().ok()?.join("runtime/mihomo").join(if cfg!(target_os = "windows") { "mihomo.exe" } else { "mihomo" });
+    cmd.env("PM_DB", db_path)
+        .env("PM_MIHOMO_DIR", data_dir.join("mihomo"));
+    if mihomo.exists() { cmd.env("PM_MIHOMO_BIN", mihomo); } else { cmd.env_remove("PM_MIHOMO_BIN"); }
+    cmd
+        .stdout(Stdio::from(log))
+        .stderr(Stdio::from(log_err));
+    match cmd.spawn() {
         Ok(child) => Some(child),
         Err(e) => {
             eprintln!("failed to start backend: {e}");
