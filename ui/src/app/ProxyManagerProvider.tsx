@@ -22,6 +22,7 @@ import {
   getRuntime,
   updateRuntime,
   runtimeAction,
+  rollbackRuntime,
   getProviders,
   getGroups,
   patchGroup,
@@ -468,6 +469,7 @@ function useProxyManagerState() {
       await load();
     }
   };
+  const rollbackRuntimeConfig = async () => { const next = await rollbackRuntime(); setRuntimeStatus(next.status); setRuntimeConfig(next.config); };
 
   const resetProxyFilters = () => {
     setScheme('');
@@ -568,7 +570,7 @@ function useProxyManagerState() {
   }, [toast]);
 
   return {
-    page, setPage, resourceView, setResourceView, stats, gateway, runtimeStatus, runtimeConfig, saveRuntime, runRuntimeAction, providers, groups, saveProxyGroup, patchProxyGroup, removeProxyGroup, rules, saveRoutingRule, patchRoutingRule, removeRoutingRule, patchProvider, refreshProvider, saveProvider, control, automationDraft, setAutomationDraft, controlSaving,
+    page, setPage, resourceView, setResourceView, stats, gateway, runtimeStatus, runtimeConfig, saveRuntime, runRuntimeAction, rollbackRuntimeConfig, providers, groups, saveProxyGroup, patchProxyGroup, removeProxyGroup, rules, saveRoutingRule, patchRoutingRule, removeRoutingRule, patchProvider, refreshProvider, saveProvider, control, automationDraft, setAutomationDraft, controlSaving,
     controlError, proxies, proxyTotal, proxyPage, setProxyPage, proxyPageSize, setProxyPageSize,
     proxyTotalPages, country, setCountry, anonymity, setAnonymity, minScore, setMinScore,
     targetFilter, setTargetFilter, proxySearch, setProxySearch, selectedProxy, setSelectedProxy,

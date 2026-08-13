@@ -166,6 +166,7 @@ export const updateRuntime = (patch: Partial<RuntimeConfig> & { kind?: 'builtin'
   req<{ status: RuntimeStatus; config: RuntimeConfig }>('/runtime', { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify(patch) });
 export const runtimeAction = (action: 'start' | 'stop' | 'restart') =>
   req<{ status: RuntimeStatus }>('/runtime/action', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ action }) });
+export const rollbackRuntime = () => req<{ status: RuntimeStatus; config: RuntimeConfig }>('/runtime/rollback', { method: 'POST' });
 
 export interface ProviderNode { name: string; type: string; server: string; port: number; [key: string]: unknown; }
 export interface Provider { id: string; name: string; kind: 'subscription' | 'fixed' | 'pool'; url: string | null; enabled: boolean; nodes: ProviderNode[]; updatedAt: number | null; lastError: string | null; }

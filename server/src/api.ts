@@ -23,7 +23,7 @@ import {
   renderBrowserDiagnosticPage,
 } from './core/browser-diagnostics.js';
 import { lookupIpProfile } from './core/ip-profile.js';
-import { applyRuntimeAction, getRuntimeConfig, getRuntimeStatus, setRuntimeKind, updateRuntimeConfig } from './core/runtime.js';
+import { applyRuntimeAction, getRuntimeConfig, getRuntimeStatus, rollbackRuntimeConfig, setRuntimeKind, updateRuntimeConfig } from './core/runtime.js';
 import { buildMihomoConfig, validateMihomoConfig } from './core/mihomo.js';
 import { listProviders, removeProvider, refreshProvider, upsertProvider } from './core/providers.js';
 import { listGroups, removeGroup, upsertGroup } from './core/groups.js';
@@ -100,6 +100,7 @@ app.post('/runtime/action', async (c) => {
     return c.json({ error: error instanceof Error ? error.message : 'Runtime 操作失败', status: getRuntimeStatus() }, 409);
   }
 });
+app.post('/runtime/rollback', (c) => c.json({ status: getRuntimeStatus(), config: rollbackRuntimeConfig() }));
 app.get('/runtime/config-preview', (c) => {
   const config = getRuntimeConfig();
   const errors = validateMihomoConfig(config);

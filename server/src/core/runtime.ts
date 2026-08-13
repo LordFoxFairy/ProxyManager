@@ -34,6 +34,7 @@ export interface RuntimeStatus {
 const CONFIG_KEY = 'runtime.config';
 const VERSION_KEY = 'runtime.config.version';
 const KIND_KEY = 'runtime.kind';
+const PREVIOUS_CONFIG_KEY = 'runtime.config.previous';
 
 const defaults: RuntimeConfig = {
   mode: 'rule', mixedPort: 7899, httpPort: 7897, socksPort: 7898,
@@ -76,9 +77,23 @@ export function updateRuntimeConfig(input: unknown): RuntimeConfig {
     dnsMode: patch.dnsMode === 'redir-host' ? 'redir-host' : patch.dnsMode === 'fake-ip' ? 'fake-ip' : current.dnsMode,
     dnsNameservers: Array.isArray(patch.dnsNameservers) ? patch.dnsNameservers.filter((item): item is string => typeof item === 'string' && Boolean(item.trim())).map((item) => item.trim()).slice(0, 8) : current.dnsNameservers,
   };
+  setSetting(PREVIOUS_CONFIG_KEY, JSON.stringify(current));
   setSetting(CONFIG_KEY, JSON.stringify(next));
   setSetting(VERSION_KEY, String(readVersion() + 1));
   return next;
+}
+
+export function rollbackRuntimeConfig(): RuntimeConfig {
+  const raw = getSetting(PREVIOUS_CONFIG_KEY);
+  if (!raw) return readConfig();
+  try {
+    const current = readConfig();
+    const previous = JSON.parse(raw) as RuntimeConfig;
+    setSetting(PREVIOUS_CONFIG_KEY, JSON.stringify(current));
+    setSetting(CONFIG_KEY, JSON.stringify(previous));
+    setSetting(VERSION_KEY, String(readVersion() + 1));
+    return previous;
+  } catch { return readConfig(); }
 }
 
 function integer(value: unknown, fallback: number, min: number, max: number) {
