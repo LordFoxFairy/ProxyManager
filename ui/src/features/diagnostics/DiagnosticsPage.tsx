@@ -138,9 +138,12 @@ export function DiagnosticsPage({
           <DiagnosticModule title="网络画像" status={ipProfile ? '已获取' : '等待出口画像'} icon={Network} rows={[
             ['ASN / 运营商', ipProfile?.asn ?? '待获取'], ['组织 / ISP', ipProfile?.org ?? ipProfile?.isp ?? '待获取'], ['住宅 / IDC / 移动', ipProfile?.mobile ? '移动网络' : ipProfile?.hosting ? '托管网络' : ipProfile ? '未标记' : '待获取'], ['代理标记', ipProfile?.proxy == null ? '待获取' : ipProfile.proxy ? '是' : '否'],
           ]} muted={!ipProfile} />
-          <DiagnosticModule title="风险情报" status="待接入数据源" icon={ShieldCheck} rows={[
-            ['公开代理记录', '待接入'], ['黑名单记录', '待接入'], ['风险等级', '待接入'], ['数据证据', '暂无'],
-          ]} muted />
+          <DiagnosticModule title="风险情报" status={ipProfile ? '画像证据' : '等待出口画像'} icon={ShieldCheck} rows={[
+            ['公开代理标记', ipProfile?.proxy == null ? '待获取' : ipProfile.proxy ? '已标记' : '未标记'],
+            ['托管 / IDC', ipProfile?.hosting == null ? '待获取' : ipProfile.hosting ? '已标记' : '未标记'],
+            ['移动网络', ipProfile?.mobile == null ? '待获取' : ipProfile.mobile ? '是' : '否'],
+            ['风险提示', !ipProfile ? '待获取' : ipProfile.proxy || ipProfile.hosting ? '需关注' : '未发现画像标记'],
+          ]} muted={!ipProfile} />
         </section>
       )}
 
