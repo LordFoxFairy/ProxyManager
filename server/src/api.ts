@@ -88,6 +88,9 @@ app.patch('/runtime', async (c) => {
   const patch = body && typeof body === 'object' ? body as Record<string, unknown> : {};
   if (patch.kind !== undefined) setRuntimeKind(patch.kind);
   const config = updateRuntimeConfig(patch);
+  if (getRuntimeStatus().kind === 'mihomo' && mihomo.running) {
+    try { await applyRuntimeAction('restart'); } catch { /* status endpoint exposes the failure */ }
+  }
   return c.json({ status: getRuntimeStatus(), config });
 });
 app.post('/runtime/action', async (c) => {
@@ -100,7 +103,13 @@ app.post('/runtime/action', async (c) => {
     return c.json({ error: error instanceof Error ? error.message : 'Runtime 操作失败', status: getRuntimeStatus() }, 409);
   }
 });
-app.post('/runtime/rollback', (c) => c.json({ status: getRuntimeStatus(), config: rollbackRuntimeConfig() }));
+app.post('/runtime/rollback', async (c) => {
+  const config = rollbackRuntimeConfig();
+  if (getRuntimeStatus().kind === 'mihomo' && mihomo.running) {
+    try { await applyRuntimeAction('restart'); } catch { /* status endpoint exposes the failure */ }
+  }
+  return c.json({ status: getRuntimeStatus(), config });
+});
 app.get('/runtime/config-preview', (c) => {
   const config = getRuntimeConfig();
   const errors = validateMihomoConfig(config);

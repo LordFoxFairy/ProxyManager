@@ -1,7 +1,9 @@
 use std::fs::{create_dir_all, OpenOptions};
 use std::process::{Child, Command, Stdio};
 use std::sync::Mutex;
-use tauri::Manager;
+use tauri::menu::{MenuBuilder, MenuItemBuilder};
+use tauri::tray::TrayIconBuilder;
+use tauri::{Manager, WindowEvent};
 
 #[tauri::command]
 fn open_external_url(url: String) -> Result<(), String> {
@@ -132,10 +134,32 @@ pub fn run() {
             }
             let child = spawn_backend(app.handle());
             *app.state::<Backend>().0.lock().unwrap() = child;
+            let show = MenuItemBuilder::with_id("show", "打开 ProxyManager").build(app)?;
+            let quit = MenuItemBuilder::with_id("quit", "退出").build(app)?;
+            let menu = MenuBuilder::new(app).items(&[&show, &quit]).build()?;
+            let icon = app.default_window_icon().cloned().ok_or("缺少应用图标")?;
+            TrayIconBuilder::new()
+                .icon(icon)
+                .menu(&menu)
+                .tooltip("ProxyManager")
+                .on_menu_event(|app, event| match event.id().as_ref() {
+                    "show" => {
+                        if let Some(window) = app.get_webview_window("main") {
+                            let _ = window.show();
+                            let _ = window.set_focus();
+                        }
+                    }
+                    "quit" => app.exit(0),
+                    _ => {}
+                })
+                .build(app)?;
             Ok(())
         })
         .on_window_event(|window, event| {
-            if let tauri::WindowEvent::Destroyed = event {
+            if let WindowEvent::CloseRequested { api, .. } = event {
+                api.prevent_close();
+                let _ = window.hide();
+            } else if let WindowEvent::Destroyed = event {
                 if let Some(mut child) = window.state::<Backend>().0.lock().unwrap().take() {
                     let _ = child.kill();
                 }
