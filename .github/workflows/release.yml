@@ -127,6 +127,26 @@ jobs:
           grep -q '"total"' /tmp/proxymanager-stats.json
           "$MIHOMO" -v
 
+      - name: Smoke test bundled backend API
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "${{ runner.os }}" == "Windows" ]]; then
+            NODE="runtime/node/node.exe"
+          else
+            NODE="runtime/node/bin/node"
+          fi
+          PM_DB="$RUNNER_TEMP/proxymanager-api-smoke.db" "$NODE" server/bundle/cli.js serve --no-gateway --port 18787 >"$RUNNER_TEMP/proxymanager-api.log" 2>&1 &
+          SERVER_PID=$!
+          trap 'kill "$SERVER_PID" 2>/dev/null || true' EXIT
+          for attempt in {1..30}; do
+            if curl -fsS http://127.0.0.1:18787/health >/tmp/proxymanager-health.json; then break; fi
+            sleep 1
+          done
+          grep -q '"ok":true' /tmp/proxymanager-health.json
+          curl -fsS http://127.0.0.1:18787/runtime >/tmp/proxymanager-runtime.json
+          grep -q '"status"' /tmp/proxymanager-runtime.json
+
       - name: Build and publish Tauri installer
         uses: tauri-apps/tauri-action@v0
         env:
