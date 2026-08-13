@@ -4,6 +4,7 @@ use std::sync::Mutex;
 use tauri::menu::{MenuBuilder, MenuItemBuilder};
 use tauri::tray::TrayIconBuilder;
 use tauri::{Manager, WindowEvent};
+use tauri_plugin_updater::UpdaterExt;
 
 fn proxy_snapshot_path(app: &tauri::AppHandle) -> Result<std::path::PathBuf, String> {
     let dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
@@ -62,6 +63,21 @@ fn open_external_url(url: String) -> Result<(), String> {
     #[cfg(target_os = "linux")]
     let result = Command::new("xdg-open").arg(&url).spawn();
     result.map(|_| ()).map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+async fn check_for_update(app: tauri::AppHandle) -> Result<serde_json::Value, String> {
+    let update = app.updater().map_err(|e| e.to_string())?.check().await.map_err(|e| e.to_string())?;
+    Ok(match update {
+        Some(update) => serde_json::json!({
+            "available": true,
+            "currentVersion": update.current_version,
+            "version": update.version,
+            "date": update.date.map(|value| value.to_string()),
+            "body": update.body,
+        }),
+        None => serde_json::json!({ "available": false }),
+    })
 }
 
 #[tauri::command]
@@ -227,7 +243,7 @@ pub fn run() {
             }
         }))
         .plugin(tauri_plugin_updater::Builder::new().build())
-        .invoke_handler(tauri::generate_handler![open_external_url, set_system_proxy, system_proxy_status])
+        .invoke_handler(tauri::generate_handler![open_external_url, check_for_update, set_system_proxy, system_proxy_status])
         .manage(Backend(Mutex::new(None)))
         .setup(|app| {
             if cfg!(debug_assertions) {
