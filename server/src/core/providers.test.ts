@@ -17,3 +17,13 @@ test('provider updates preserve refreshed metadata', () => {
   assert.equal(upsertProvider({ id: 'test-refresh', updatedAt: 456, lastError: 'network' }).lastError, 'network');
   removeProvider('test-refresh');
 });
+
+test('provider nodes reject invalid protocols and ports', () => {
+  const provider = upsertProvider({ id: 'invalid-nodes', kind: 'fixed', nodes: [
+    { name: 'bad-port', type: 'http', server: '127.0.0.1', port: 0 },
+    { name: 'bad-type', type: 'socks4', server: '127.0.0.1', port: 8080 },
+    { name: 'valid', type: 'socks5', server: '127.0.0.1', port: 8080 },
+  ] });
+  assert.deepEqual(provider.nodes.map((node) => node.name), ['valid']);
+  removeProvider('invalid-nodes');
+});
