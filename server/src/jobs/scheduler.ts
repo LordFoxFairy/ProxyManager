@@ -1,5 +1,7 @@
 import type { AutomationSettings } from '../core/control.js';
 import { JobOrchestrator } from './job-orchestrator.js';
+import { listRuleProviders, refreshRuleProvider, ruleProviderDue } from '../core/rules.js';
+import { mihomo } from '../core/mihomo.js';
 
 export class JobScheduler {
   private started = false;
@@ -29,6 +31,12 @@ export class JobScheduler {
     const validateDue = state.lastValidateAt === null ||
       now - state.lastValidateAt >= automation.recheckIntervalMinutes * 60_000;
     const tasks: Promise<void>[] = [];
+    const dueProviders = listRuleProviders().filter((provider) => ruleProviderDue(provider, now));
+    for (const provider of dueProviders) {
+      tasks.push(refreshRuleProvider(provider.id).then(() => {
+        void mihomo.reload().catch(() => undefined);
+      }).catch(() => undefined));
+    }
     if (collectDue) {
       const collection = this.jobs.startCollection(undefined, true);
       if (collection) tasks.push(collection);
@@ -48,7 +56,9 @@ export class JobScheduler {
     const after = Date.now();
     const nextCollect = (afterState.lastCollectAt ?? after) + latest.collectIntervalMinutes * 60_000;
     const nextValidate = (afterState.lastValidateAt ?? after) + latest.recheckIntervalMinutes * 60_000;
-    this.schedule(Math.min(nextCollect, nextValidate) - after);
+    const nextRule = listRuleProviders().filter((provider) => provider.enabled && provider.url)
+      .reduce((next, provider) => Math.min(next, (provider.updatedAt ?? after) + provider.interval * 1000), Number.POSITIVE_INFINITY);
+    this.schedule(Math.min(nextCollect, nextValidate, nextRule) - after);
   }
 
   reschedule = () => {

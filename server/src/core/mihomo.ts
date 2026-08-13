@@ -154,6 +154,13 @@ export class MihomoController {
     this.child = null;
   }
 
+  async reload(): Promise<void> {
+    if (!this.running) return;
+    const config = getRuntimeConfig();
+    await this.stop();
+    await this.start(config);
+  }
+
   private scheduleRecovery(config: RuntimeConfig) {
     if (this.recoveryTimer || this.recoveryAttempts >= 3) return;
     const delay = 500 * 2 ** this.recoveryAttempts;
