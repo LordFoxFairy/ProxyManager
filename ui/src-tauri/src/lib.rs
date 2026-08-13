@@ -48,7 +48,12 @@ fn snapshot_system_proxy(app: &tauri::AppHandle) -> Result<(), String> {
         out.into_bytes()
     };
     #[cfg(target_os = "windows")]
-    let value = Command::new("reg").args(["query", "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings", "/v", "ProxyEnable", "/v", "ProxyServer"]).output().map_err(|e| e.to_string())?.stdout;
+    let value = {
+        let key = "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings";
+        let enable = Command::new("reg").args(["query", key, "/v", "ProxyEnable"]).output().map_err(|e| e.to_string())?;
+        let server = Command::new("reg").args(["query", key, "/v", "ProxyServer"]).output().map_err(|e| e.to_string())?;
+        format!("[ProxyEnable]\n{}\n[ProxyServer]\n{}", String::from_utf8_lossy(&enable.stdout), String::from_utf8_lossy(&server.stdout)).into_bytes()
+    };
     #[allow(unreachable_code)]
     write(path, value).map_err(|e| e.to_string())
 }
@@ -151,16 +156,20 @@ fn set_system_proxy(app: tauri::AppHandle, enabled: bool, port: u16) -> Result<(
     #[cfg(target_os = "windows")]
     {
         let snapshot = if !enabled { std::fs::read_to_string(proxy_snapshot_path(&app)?).unwrap_or_default() } else { String::new() };
-        let original_enabled = snapshot.lines().find_map(|line| line.split_once("REG_DWORD").map(|(_, value)| value.trim())).unwrap_or("0");
-        let original_server = snapshot.lines().find_map(|line| line.split_once("REG_SZ").map(|(_, value)| value.trim())).unwrap_or("");
+        let original_enabled = snapshot.lines().find_map(|line| line.contains("ProxyEnable")
+            .then(|| line.split_once("REG_DWORD").map(|(_, value)| value.trim()).unwrap_or("0"))).unwrap_or("0");
+        let original_server = snapshot.lines().find_map(|line| line.contains("ProxyServer")
+            .then(|| line.split_once("REG_SZ").map(|(_, value)| value.trim()).unwrap_or(""))).unwrap_or("");
         let proxy = if enabled { format!("127.0.0.1:{}", port) } else { original_server.to_string() };
-        let enable = if enabled { "1" } else { original_enabled };
+        let enable = if enabled { "1" } else if original_enabled.eq_ignore_ascii_case("0x1") { "1" } else { "0" };
         let key = "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings";
         let status = Command::new("reg").args(["add", key, "/v", "ProxyEnable", "/t", "REG_DWORD", "/d", enable, "/f"]).status().map_err(|e| e.to_string())?;
         if !status.success() { return Err("Windows 用户代理开关设置失败".into()); }
         if !proxy.is_empty() {
             let status = Command::new("reg").args(["add", key, "/v", "ProxyServer", "/t", "REG_SZ", "/d", &proxy, "/f"]).status().map_err(|e| e.to_string())?;
             if !status.success() { return Err("Windows 用户代理地址设置失败".into()); }
+        } else if !enabled {
+            let _ = Command::new("reg").args(["delete", key, "/v", "ProxyServer", "/f"]).status();
         }
         let _ = Command::new("netsh").args(["winhttp", "import", "proxy", "source=ie"]).status();
         return Ok(());
