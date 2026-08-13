@@ -27,7 +27,7 @@ import { applyRuntimeAction, getRuntimeConfig, getRuntimeStatus, rollbackRuntime
 import { buildMihomoConfig, mihomo, validateMihomoConfig } from './core/mihomo.js';
 import { listProviders, removeProvider, refreshProvider, upsertProvider } from './core/providers.js';
 import { listGroups, removeGroup, upsertGroup } from './core/groups.js';
-import { listRules, removeRule, upsertRule } from './core/rules.js';
+import { listRuleProviders, listRules, removeRule, removeRuleProvider, upsertRule, upsertRuleProvider } from './core/rules.js';
 import { gatewayStats, traffic } from './core/gateway.js';
 import { picker } from './core/picker.js';
 import {
@@ -129,6 +129,10 @@ app.get('/rules', (c) => c.json({ rules: listRules() }));
 app.post('/rules', async (c) => { let body: unknown = {}; try { body = await c.req.json(); } catch {} const rule = upsertRule(body); await reloadMihomoIfRunning(); return c.json(rule); });
 app.patch('/rules/:id', async (c) => { let body: unknown = {}; try { body = await c.req.json(); } catch {} const rule = upsertRule({ ...(body as object), id: c.req.param('id') }); await reloadMihomoIfRunning(); return c.json(rule); });
 app.delete('/rules/:id', async (c) => { const deleted = removeRule(c.req.param('id')); if (deleted) await reloadMihomoIfRunning(); return deleted ? c.json({ deleted: c.req.param('id') }) : c.json({ error: '规则不存在' }, 404); });
+app.get('/rule-providers', (c) => c.json({ providers: listRuleProviders() }));
+app.post('/rule-providers', async (c) => { let body: unknown = {}; try { body = await c.req.json(); } catch {} const provider = upsertRuleProvider(body); await reloadMihomoIfRunning(); return c.json(provider); });
+app.patch('/rule-providers/:id', async (c) => { let body: unknown = {}; try { body = await c.req.json(); } catch {} const provider = upsertRuleProvider({ ...(body as object), id: c.req.param('id') }); await reloadMihomoIfRunning(); return c.json(provider); });
+app.delete('/rule-providers/:id', async (c) => { const deleted = removeRuleProvider(c.req.param('id')); if (deleted) await reloadMihomoIfRunning(); return deleted ? c.json({ deleted: c.req.param('id') }) : c.json({ error: '规则 Provider 不存在' }, 404); });
 
 app.post('/diagnostics/browser/session', (c) => {
   const session = createBrowserDiagnosticSession();

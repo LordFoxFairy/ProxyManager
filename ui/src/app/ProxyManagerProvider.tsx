@@ -35,6 +35,10 @@ import {
   patchRule,
   removeRule,
   saveRule,
+  getRuleProviders,
+  patchRuleProvider,
+  removeRuleProvider,
+  saveRuleProvider,
   getProxies,
   getProxyConnectivity,
   getStats,
@@ -56,6 +60,7 @@ import {
   type Provider,
   type ProxyGroup,
   type RoutingRule,
+  type RuleProvider,
 } from '../lib/api';
 import { invoke } from '@tauri-apps/api/core';
 import type { SelectOption } from '../components/SelectMenu';
@@ -83,6 +88,7 @@ function useProxyManagerState() {
   const [providers, setProviders] = useState<Provider[]>([]);
   const [groups, setGroups] = useState<ProxyGroup[]>([]);
   const [rules, setRules] = useState<RoutingRule[]>([]);
+  const [ruleProviders, setRuleProviders] = useState<RuleProvider[]>([]);
   const [control, setControl] = useState<ControlState | null>(null);
   const [automationDraft, setAutomationDraft] = useState<AutomationSettings | null>(null);
   const [controlSaving, setControlSaving] = useState(false);
@@ -132,7 +138,7 @@ function useProxyManagerState() {
 
   const load = useCallback(async () => {
     try {
-      const [nextStats, nextGateway, proxyResult, logResult, nextControl, nextRuntime, nextProviders, nextGroups, nextRules] = await Promise.all([
+      const [nextStats, nextGateway, proxyResult, logResult, nextControl, nextRuntime, nextProviders, nextGroups, nextRules, nextRuleProviders] = await Promise.all([
         getStats(),
         getGateway(),
         getProxies({
@@ -152,6 +158,8 @@ function useProxyManagerState() {
         getProviders(),
         getGroups(),
         getRules(),
+        getRuleProviders(),
+        getRuleProviders(),
       ]);
       setStats(nextStats);
       setGateway(nextGateway);
@@ -160,6 +168,7 @@ function useProxyManagerState() {
       setProviders(nextProviders.providers);
       setGroups(nextGroups.groups);
       setRules(nextRules.rules);
+      setRuleProviders(nextRuleProviders.providers);
       setProxies(proxyResult.proxies);
       setProxyTotal(proxyResult.total);
       setProxyPage(proxyResult.page);
@@ -492,6 +501,9 @@ function useProxyManagerState() {
   const saveRoutingRule = async (rule: Partial<RoutingRule>) => { const value = await saveRule(rule); setRules((current) => current.some((item) => item.id === value.id) ? current.map((item) => item.id === value.id ? value : item) : [...current, value]); return value; };
   const patchRoutingRule = async (id: string, patch: Partial<RoutingRule>) => { const value = await patchRule(id, patch); setRules((current) => current.map((item) => item.id === id ? value : item)); return value; };
   const removeRoutingRule = async (id: string) => { await removeRule(id); setRules((current) => current.filter((item) => item.id !== id)); };
+  const saveRuleProviderState = async (value: Partial<RuleProvider>) => { const next = await saveRuleProvider(value); setRuleProviders((current) => current.some((item) => item.id === next.id) ? current.map((item) => item.id === next.id ? next : item) : [...current, next]); return next; };
+  const patchRuleProviderState = async (id: string, value: Partial<RuleProvider>) => { const next = await patchRuleProvider(id, value); setRuleProviders((current) => current.map((item) => item.id === id ? next : item)); return next; };
+  const removeRuleProviderState = async (id: string) => { await removeRuleProvider(id); setRuleProviders((current) => current.filter((item) => item.id !== id)); };
 
   const runningSources = control?.sources.filter((source) => source.running) ?? [];
   const collectionJob = stats?.jobs.collection;
@@ -575,7 +587,7 @@ function useProxyManagerState() {
   }, [toast]);
 
   return {
-    page, setPage, resourceView, setResourceView, stats, gateway, runtimeStatus, runtimeConfig, systemProxyActual, saveRuntime, runRuntimeAction, rollbackRuntimeConfig, providers, groups, saveProxyGroup, patchProxyGroup, removeProxyGroup, rules, saveRoutingRule, patchRoutingRule, removeRoutingRule, patchProvider, refreshProvider, saveProvider, control, automationDraft, setAutomationDraft, controlSaving,
+    page, setPage, resourceView, setResourceView, stats, gateway, runtimeStatus, runtimeConfig, systemProxyActual, saveRuntime, runRuntimeAction, rollbackRuntimeConfig, providers, groups, saveProxyGroup, patchProxyGroup, removeProxyGroup, rules, saveRoutingRule, patchRoutingRule, removeRoutingRule, ruleProviders, saveRuleProviderState, patchRuleProviderState, removeRuleProviderState, patchProvider, refreshProvider, saveProvider, control, automationDraft, setAutomationDraft, controlSaving,
     controlError, proxies, proxyTotal, proxyPage, setProxyPage, proxyPageSize, setProxyPageSize,
     proxyTotalPages, country, setCountry, anonymity, setAnonymity, minScore, setMinScore,
     targetFilter, setTargetFilter, proxySearch, setProxySearch, selectedProxy, setSelectedProxy,
