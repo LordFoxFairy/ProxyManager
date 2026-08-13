@@ -9,8 +9,8 @@ export function ConnectionsPage({ gateway }: { gateway: Gateway }) {
     const source = new EventSource(gatewayConnectionsStreamUrl());
     source.addEventListener('connections', (event) => {
       try {
-        const payload = JSON.parse((event as MessageEvent).data) as { items?: Array<{ start?: string; metadata?: { host?: string; destinationIP?: string; process?: string }; chains?: string[]; rule?: string; upload?: number; download?: number }> };
-        if (!Array.isArray(payload.items)) return;
+        const payload = JSON.parse((event as MessageEvent).data) as { source?: string; items?: Array<{ start?: string; metadata?: { host?: string; destinationIP?: string; process?: string }; chains?: string[]; rule?: string; upload?: number; download?: number }> };
+        if (payload.source !== 'mihomo' || !Array.isArray(payload.items)) return;
         setStreamTraffic(payload.items.map((item) => ({ at: item.start ? Date.parse(item.start) || Date.now() : Date.now(), target: item.metadata?.host ?? item.metadata?.destinationIP ?? '—', via: item.chains?.[0] ?? null, ms: 0, ok: true, source: 'mihomo' as const, process: item.metadata?.process ?? null, rule: item.rule ?? null, upload: item.upload ?? 0, download: item.download ?? 0 })));
       } catch { /* malformed stream events are ignored */ }
     });

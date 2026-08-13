@@ -459,7 +459,7 @@ app.get('/gateway/connections/stream', async (c) => {
         if (done) return;
         const items = await mihomo.connections(200);
         if (done) return;
-        try { controller.enqueue(encoder.encode(`event: connections\ndata: ${JSON.stringify({ at: Date.now(), items })}\n\n`)); } catch { done = true; }
+        try { controller.enqueue(encoder.encode(`event: connections\ndata: ${JSON.stringify({ at: Date.now(), source: mihomo.running ? 'mihomo' : 'gateway', items })}\n\n`)); } catch { done = true; }
       };
       await write();
       if (done) return;
