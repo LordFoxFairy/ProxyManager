@@ -451,18 +451,22 @@ app.get('/gateway/connections', async (c) => {
 
 app.get('/gateway/connections/stream', async (c) => {
   const encoder = new TextEncoder();
+  let timer: NodeJS.Timeout | null = null;
+  let done = false;
   const stream = new ReadableStream({
     async start(controller) {
-      let closed = false;
       const write = async () => {
-        if (closed) return;
+        if (done) return;
         const items = await mihomo.connections(200);
-        controller.enqueue(encoder.encode(`event: connections\ndata: ${JSON.stringify({ at: Date.now(), items })}\n\n`));
+        if (done) return;
+        try { controller.enqueue(encoder.encode(`event: connections\ndata: ${JSON.stringify({ at: Date.now(), items })}\n\n`)); } catch { done = true; }
       };
       await write();
-      const timer = setInterval(() => { void write(); }, 2000);
-      setTimeout(() => { closed = true; clearInterval(timer); try { controller.close(); } catch {} }, 60_000);
+      if (done) return;
+      timer = setInterval(() => { void write(); }, 2000);
+      setTimeout(() => { done = true; if (timer) clearInterval(timer); timer = null; try { controller.close(); } catch {} }, 60_000);
     },
+    cancel() { done = true; if (timer) clearInterval(timer); timer = null; },
   });
   return new Response(stream, { headers: { 'content-type': 'text/event-stream', 'cache-control': 'no-cache', connection: 'keep-alive' } });
 });
