@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { getRuntimeConfig, type RuntimeConfig } from './runtime.js';
 import { get, type Proxy } from './store.js';
 import { providerNodes } from './providers.js';
+import { listGroups } from './groups.js';
 
 export interface MihomoProxy {
   name: string;
@@ -21,7 +22,7 @@ export interface MihomoConfig {
   'external-controller': string;
   secret: string;
   proxies: MihomoProxy[];
-  'proxy-groups': [{ name: 'PROXY'; type: 'select'; proxies: string[] }];
+  'proxy-groups': { name: string; type: string; proxies: string[]; url?: string; interval?: number; tolerance?: number }[];
   rules: string[];
 }
 
@@ -37,6 +38,9 @@ export function buildMihomoConfig(config: RuntimeConfig, controller = '127.0.0.1
   const external = providerNodes().filter((node) => node.type === 'http' || node.type === 'socks5').map((node) => ({ ...node, udp: false })) as MihomoProxy[];
   const merged = [...new Map([...proxies, ...external].map((node) => [node.name, node])).values()];
   const names = merged.map((proxy) => proxy.name);
+  const available = new Set([...names, 'DIRECT']);
+  const groups: MihomoConfig['proxy-groups'] = listGroups().filter((group) => group.enabled).map((group) => ({ name: group.name, type: group.kind, proxies: group.name === 'PROXY' ? [...names, ...group.members.filter((member) => member === 'DIRECT')] : group.members.filter((member) => available.has(member) || member === 'PROXY'), url: group.url, interval: group.interval, tolerance: group.tolerance }));
+  if (!groups.some((group) => group.name === 'PROXY')) groups.unshift({ name: 'PROXY', type: 'select', proxies: [...names, 'DIRECT'] });
   return {
     'mixed-port': config.mixedPort,
     'allow-lan': false,
@@ -45,7 +49,7 @@ export function buildMihomoConfig(config: RuntimeConfig, controller = '127.0.0.1
     'external-controller': controller,
     secret,
     proxies: merged,
-    'proxy-groups': [{ name: 'PROXY', type: 'select', proxies: [...names, 'DIRECT'] }],
+    'proxy-groups': groups,
     rules: ['MATCH,PROXY'],
   };
 }

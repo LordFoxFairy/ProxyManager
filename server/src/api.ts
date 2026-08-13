@@ -26,6 +26,7 @@ import { lookupIpProfile } from './core/ip-profile.js';
 import { applyRuntimeAction, getRuntimeConfig, getRuntimeStatus, setRuntimeKind, updateRuntimeConfig } from './core/runtime.js';
 import { buildMihomoConfig, validateMihomoConfig } from './core/mihomo.js';
 import { listProviders, removeProvider, refreshProvider, upsertProvider } from './core/providers.js';
+import { listGroups, removeGroup, upsertGroup } from './core/groups.js';
 import { gatewayStats, traffic } from './core/gateway.js';
 import { picker } from './core/picker.js';
 import {
@@ -108,6 +109,10 @@ app.post('/providers', async (c) => { let body: unknown = {}; try { body = await
 app.patch('/providers/:id', async (c) => { let body: unknown = {}; try { body = await c.req.json(); } catch {} return c.json(upsertProvider({ ...(body as object), id: c.req.param('id') })); });
 app.delete('/providers/:id', (c) => removeProvider(c.req.param('id')) ? c.json({ deleted: c.req.param('id') }) : c.json({ error: 'Provider 不存在' }, 404));
 app.post('/providers/:id/refresh', async (c) => { try { return c.json(await refreshProvider(c.req.param('id'))); } catch (error) { return c.json({ error: error instanceof Error ? error.message : 'Provider 更新失败' }, 409); } });
+app.get('/groups', (c) => c.json({ groups: listGroups() }));
+app.post('/groups', async (c) => { let body: unknown = {}; try { body = await c.req.json(); } catch {} return c.json(upsertGroup(body)); });
+app.patch('/groups/:id', async (c) => { let body: unknown = {}; try { body = await c.req.json(); } catch {} return c.json(upsertGroup({ ...(body as object), id: c.req.param('id') })); });
+app.delete('/groups/:id', (c) => removeGroup(c.req.param('id')) ? c.json({ deleted: c.req.param('id') }) : c.json({ error: '代理组不存在或不可删除' }, 409));
 
 app.post('/diagnostics/browser/session', (c) => {
   const session = createBrowserDiagnosticSession();

@@ -18,7 +18,7 @@ npm run dev collect          # 采集候选(约 5,900 个)
 npm run dev validate -n 700  # 校验
 npm run dev get -n 10 --https
 npm run dev serve            # API :8787 + 本地代理 :7899
-npm test                     # 46 个单元测试
+npm test                     # 48 个单元测试
 
 # 桌面应用(会自动拉起后端)
 cd ui && npm install && npm run tauri dev
@@ -120,6 +120,9 @@ p90 4.0s),不加迟滞会导致几乎每个请求都换节点,连接复用全废
 | `POST /providers` | 创建 Provider |
 | `PATCH /providers/{id}` | 更新 Provider 开关或节点 |
 | `POST /providers/{id}/refresh` | 拉取并解析订阅 Provider |
+| `GET /groups` | 代理组目录 |
+| `POST /groups` | 创建代理组 |
+| `PATCH /groups/{id}` | 修改代理组成员和策略 |
 
 `GET /proxies` 支持 `scheme`、`https`、`country`、`anonymity`、
 `min_score`、`target` 和 `search` 筛选。`target` 只返回对指定网站已有可用检测结果的
