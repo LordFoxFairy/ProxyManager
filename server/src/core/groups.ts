@@ -24,6 +24,7 @@ function read(): ProxyGroup[] {
 }
 function write(groups: ProxyGroup[]) { setSetting(KEY, JSON.stringify(groups)); }
 export function listGroups() { return read(); }
+export function replaceGroups(value: unknown[]): ProxyGroup[] { const next = value.map((item) => upsertGroup(item)); const ids = new Set(next.map((item) => item.id)); write(read().filter((item) => ids.has(item.id))); return next; }
 export function upsertGroup(input: unknown): ProxyGroup {
   const row = input && typeof input === 'object' ? input as Record<string, unknown> : {};
   const id = String(row.id ?? `group-${Date.now()}`).replace(/[^a-zA-Z0-9_-]/g, '-').slice(0, 64);

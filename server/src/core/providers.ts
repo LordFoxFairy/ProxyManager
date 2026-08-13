@@ -7,6 +7,7 @@ const KEY = 'providers.catalog';
 const read = (): Provider[] => { try { const value = JSON.parse(getSetting(KEY) ?? '[]'); return Array.isArray(value) ? value : []; } catch { return []; } };
 const write = (value: Provider[]) => setSetting(KEY, JSON.stringify(value));
 export function listProviders(): Provider[] { return read(); }
+export function replaceProviders(value: unknown[]): Provider[] { const next = value.map((item) => upsertProvider(item)); const ids = new Set(next.map((item) => item.id)); write(read().filter((item) => ids.has(item.id))); return next; }
 export function upsertProvider(input: unknown): Provider {
   const row = input && typeof input === 'object' ? input as Record<string, unknown> : {};
   const id = String(row.id ?? `provider-${Date.now()}`).replace(/[^a-zA-Z0-9_-]/g, '-').slice(0, 64);
