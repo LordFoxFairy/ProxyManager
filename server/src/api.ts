@@ -88,17 +88,26 @@ app.get('/runtime', (c) => c.json({ status: getRuntimeStatus(), config: getRunti
 app.get('/runtime/probe', async (c) => c.json({ status: await probeRuntimeStatus(), config: getRuntimeConfig() }));
 const reloadMihomoIfRunning = async () => {
   if (getRuntimeStatus().kind !== 'mihomo' || !mihomo.running) return null;
-  try { await applyRuntimeAction('restart'); } catch { /* status carries the error */ }
+  await applyRuntimeAction('restart');
   return getRuntimeStatus();
 };
 app.patch('/runtime', async (c) => {
   let body: unknown = {};
   try { body = await c.req.json(); } catch { /* return current state */ }
   const patch = body && typeof body === 'object' ? body as Record<string, unknown> : {};
+  const previousKind = getRuntimeStatus().kind;
+  const previous = getRuntimeConfig();
   if (patch.kind !== undefined) setRuntimeKind(patch.kind);
   const config = updateRuntimeConfig(patch);
-  await reloadMihomoIfRunning();
-  return c.json({ status: getRuntimeStatus(), config });
+  try {
+    await reloadMihomoIfRunning();
+    return c.json({ status: getRuntimeStatus(), config });
+  } catch (error) {
+    updateRuntimeConfig(previous);
+    setRuntimeKind(previousKind);
+    try { if (mihomo.running) await mihomo.stop(); await mihomo.start(previous); } catch { /* preserve the original failure */ }
+    return c.json({ error: error instanceof Error ? error.message : 'Runtime 配置未能生效', status: getRuntimeStatus(), config: previous }, 409);
+  }
 });
 app.post('/runtime/action', async (c) => {
   let body: { action?: unknown } = {};

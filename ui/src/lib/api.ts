@@ -163,6 +163,8 @@ export interface RuntimeStatus {
   dns: 'on' | 'off' | 'unsupported';
   capabilities: { systemProxy: boolean; tun: boolean; dns: boolean; mihomo: boolean };
   features: { controller: 'active' | 'configured' | 'inactive' | 'unsupported' | 'permission-required' | 'failed' | 'unknown'; tun: 'active' | 'configured' | 'inactive' | 'unsupported' | 'permission-required' | 'failed' | 'unknown'; dns: 'active' | 'configured' | 'inactive' | 'unsupported' | 'permission-required' | 'failed' | 'unknown' };
+  platform: { os: string; tunDevice: RuntimeStatus['features']['tun']; dnsPermission: RuntimeStatus['features']['dns'] };
+  logs: string[];
   lastError: string | null;
 }
 

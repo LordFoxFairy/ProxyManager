@@ -92,11 +92,13 @@ export class MihomoController {
   private intentionalStop = false;
   private recoveryAttempts = 0;
   private recoveryTimer: NodeJS.Timeout | null = null;
+  private recentLogs: string[] = [];
 
   get running() { return Boolean(this.child && this.child.exitCode === null); }
   get error() { return this.lastError; }
   get path() { return this.configPath; }
   get recovering() { return this.recoveryTimer !== null; }
+  get logs() { return [...this.recentLogs]; }
 
   async connections(limit = 100): Promise<MihomoConnection[]> {
     const controller = process.env.PM_MIHOMO_CONTROLLER ?? '127.0.0.1:9090';
@@ -126,7 +128,16 @@ export class MihomoController {
     this.configPath = join(directory, 'config.json');
     await writeFile(this.configPath, JSON.stringify(buildMihomoConfig(config), null, 2), 'utf8');
     this.lastError = null;
-    this.child = spawn(binary, ['-d', directory, '-f', this.configPath], { stdio: 'ignore' });
+    this.child = spawn(binary, ['-d', directory, '-f', this.configPath], { stdio: ['ignore', 'pipe', 'pipe'] });
+    this.recentLogs = [];
+    const capture = (chunk: Buffer) => {
+      for (const line of chunk.toString('utf8').split(/\r?\n/).map((value) => value.trim()).filter(Boolean)) {
+        this.recentLogs.push(line);
+        if (this.recentLogs.length > 80) this.recentLogs.shift();
+      }
+    };
+    this.child.stdout?.on('data', capture);
+    this.child.stderr?.on('data', capture);
     this.child.once('error', (error) => { this.lastError = error.message; this.child = null; });
     this.child.once('exit', (code, signal) => {
       if (!this.intentionalStop && (code !== 0 || signal !== 'SIGTERM')) {

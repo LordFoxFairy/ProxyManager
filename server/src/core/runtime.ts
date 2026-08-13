@@ -1,6 +1,7 @@
 import { getSetting, setSetting } from './store.js';
 import { mihomo } from './mihomo.js';
 import { createConnection } from 'node:net';
+import { existsSync } from 'node:fs';
 
 export type RuntimeKind = 'builtin' | 'mihomo';
 export type RuntimeLifecycle = 'stopped' | 'running' | 'degraded' | 'error';
@@ -35,6 +36,8 @@ export interface RuntimeStatus {
   dns: 'on' | 'off' | 'unsupported';
   capabilities: { systemProxy: boolean; tun: boolean; dns: boolean; mihomo: boolean };
   features: { controller: RuntimeFeatureState; tun: RuntimeFeatureState; dns: RuntimeFeatureState };
+  platform: { os: string; tunDevice: RuntimeFeatureState; dnsPermission: RuntimeFeatureState };
+  logs: string[];
   lastError: string | null;
 }
 
@@ -137,8 +140,14 @@ export function getRuntimeStatus(): RuntimeStatus {
       tun: kind === 'mihomo' && mihomoAvailable ? (config.tun ? 'configured' : 'inactive') : 'unsupported',
       dns: kind === 'mihomo' && mihomoAvailable ? (config.dns ? 'configured' : 'inactive') : 'unsupported',
     },
+    platform: { os: process.platform, tunDevice: process.platform === 'linux' ? (requireTunDevice() ? 'configured' : 'permission-required') : process.platform === 'win32' || process.platform === 'darwin' ? 'permission-required' : 'unsupported', dnsPermission: 'unknown' },
+    logs: mihomo.logs,
     lastError: mihomo.error ?? (kind === 'mihomo' && !mihomoAvailable ? '未配置 PM_MIHOMO_BIN' : null),
   };
+}
+
+function requireTunDevice() {
+  try { return existsSync('/dev/net/tun'); } catch { return false; }
 }
 
 function tcpProbe(address: string, timeoutMs = 700): Promise<boolean> {
@@ -156,15 +165,15 @@ function tcpProbe(address: string, timeoutMs = 700): Promise<boolean> {
 
 export async function probeRuntimeStatus(): Promise<RuntimeStatus> {
   const base = getRuntimeStatus();
+  const config = getRuntimeConfig();
   if (base.kind !== 'mihomo' || !base.capabilities.mihomo) return base;
-  if (!mihomo.running) return { ...base, features: { ...base.features, controller: 'inactive', tun: base.tun === 'on' ? 'failed' : 'inactive', dns: base.dns === 'on' ? 'failed' : 'inactive' }, lastError: base.lastError ?? 'Mihomo 未运行' };
+  if (!mihomo.running) return { ...base, features: { ...base.features, controller: 'inactive', tun: base.tun === 'on' ? 'failed' : 'inactive', dns: base.dns === 'on' ? 'failed' : 'inactive' }, platform: { ...base.platform, dnsPermission: config.dns ? 'unknown' : 'inactive' }, lastError: base.lastError ?? 'Mihomo 未运行' };
   const controller = base.controller ?? process.env.PM_MIHOMO_CONTROLLER ?? '127.0.0.1:9090';
   let controllerOk = false;
   try {
     const response = await fetch(`http://${controller}/version`, { signal: AbortSignal.timeout(1000) });
     controllerOk = response.ok;
   } catch { /* controller is not reachable */ }
-  const config = getRuntimeConfig();
   const dnsOk = config.dns ? await tcpProbe(config.dnsListen) : false;
   return {
     ...base,
@@ -175,6 +184,8 @@ export async function probeRuntimeStatus(): Promise<RuntimeStatus> {
       // but only a platform helper can prove a system route was installed.
       tun: !config.tun ? 'inactive' : controllerOk ? 'configured' : 'failed',
     },
+    platform: { ...base.platform, dnsPermission: !config.dns ? 'inactive' : dnsOk ? 'active' : 'failed' },
+    logs: mihomo.logs,
     lastError: controllerOk ? base.lastError : 'Mihomo controller 不可达',
   };
 }
