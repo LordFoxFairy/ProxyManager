@@ -123,7 +123,7 @@ app.get('/providers', (c) => c.json({ providers: listProviders() }));
 app.post('/providers', async (c) => { let body: unknown = {}; try { body = await c.req.json(); } catch {} const provider = upsertProvider(body); await reloadMihomoIfRunning(); return c.json(provider); });
 app.patch('/providers/:id', async (c) => { let body: unknown = {}; try { body = await c.req.json(); } catch {} const provider = upsertProvider({ ...(body as object), id: c.req.param('id') }); await reloadMihomoIfRunning(); return c.json(provider); });
 app.delete('/providers/:id', (c) => removeProvider(c.req.param('id')) ? c.json({ deleted: c.req.param('id') }) : c.json({ error: 'Provider 不存在' }, 404));
-app.post('/providers/:id/refresh', async (c) => { try { return c.json(await refreshProvider(c.req.param('id'))); } catch (error) { return c.json({ error: error instanceof Error ? error.message : 'Provider 更新失败' }, 409); } });
+app.post('/providers/:id/refresh', async (c) => { try { const provider = await refreshProvider(c.req.param('id')); await reloadMihomoIfRunning(); return c.json(provider); } catch (error) { return c.json({ error: error instanceof Error ? error.message : 'Provider 更新失败' }, 409); } });
 app.get('/groups', (c) => c.json({ groups: listGroups() }));
 app.post('/groups', async (c) => { let body: unknown = {}; try { body = await c.req.json(); } catch {} const group = upsertGroup(body); await reloadMihomoIfRunning(); return c.json(group); });
 app.patch('/groups/:id', async (c) => { let body: unknown = {}; try { body = await c.req.json(); } catch {} const group = upsertGroup({ ...(body as object), id: c.req.param('id') }); await reloadMihomoIfRunning(); return c.json(group); });
