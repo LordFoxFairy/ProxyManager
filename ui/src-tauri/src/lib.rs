@@ -1,9 +1,28 @@
-use std::fs::{create_dir_all, OpenOptions};
+use std::fs::{create_dir_all, write, OpenOptions};
 use std::process::{Child, Command, Stdio};
 use std::sync::Mutex;
 use tauri::menu::{MenuBuilder, MenuItemBuilder};
 use tauri::tray::TrayIconBuilder;
 use tauri::{Manager, WindowEvent};
+
+fn proxy_snapshot_path(app: &tauri::AppHandle) -> Result<std::path::PathBuf, String> {
+    let dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
+    create_dir_all(&dir).map_err(|e| e.to_string())?;
+    Ok(dir.join("system-proxy.snapshot"))
+}
+
+fn snapshot_system_proxy(app: &tauri::AppHandle) -> Result<(), String> {
+    let path = proxy_snapshot_path(app)?;
+    if path.exists() { return Ok(()); }
+    #[cfg(target_os = "macos")]
+    let value = Command::new("networksetup").args(["-getwebproxy", "Wi-Fi"]).output().map_err(|e| e.to_string())?.stdout;
+    #[cfg(target_os = "linux")]
+    let value = Command::new("gsettings").args(["get", "org.gnome.system.proxy", "mode"]).output().map_err(|e| e.to_string())?.stdout;
+    #[cfg(target_os = "windows")]
+    let value = Command::new("netsh").args(["winhttp", "show", "proxy"]).output().map_err(|e| e.to_string())?.stdout;
+    #[allow(unreachable_code)]
+    write(path, value).map_err(|e| e.to_string())
+}
 
 #[tauri::command]
 fn open_external_url(url: String) -> Result<(), String> {
@@ -17,7 +36,8 @@ fn open_external_url(url: String) -> Result<(), String> {
 }
 
 #[tauri::command]
-fn set_system_proxy(enabled: bool, port: u16) -> Result<(), String> {
+fn set_system_proxy(app: tauri::AppHandle, enabled: bool, port: u16) -> Result<(), String> {
+    if enabled { snapshot_system_proxy(&app)?; }
     #[cfg(target_os = "macos")]
     {
         let output = Command::new("networksetup").arg("-listallnetworkservices").output().map_err(|e| e.to_string())?;
@@ -27,20 +47,29 @@ fn set_system_proxy(enabled: bool, port: u16) -> Result<(), String> {
             .map(String::from)
             .collect::<Vec<_>>();
         let service = services.iter().find(|name| *name == "Wi-Fi").or_else(|| services.iter().find(|name| *name == "Ethernet")).cloned().ok_or("未找到可用网络服务")?;
+        let snapshot = if !enabled { std::fs::read_to_string(proxy_snapshot_path(&app)?).unwrap_or_default() } else { String::new() };
+        let original_server = snapshot.lines().find_map(|line| line.strip_prefix("Server: ")).unwrap_or("");
+        let original_port = snapshot.lines().find_map(|line| line.strip_prefix("Port: ")).unwrap_or("");
+        let original_enabled = snapshot.lines().any(|line| line.trim().eq_ignore_ascii_case("Enabled: Yes"));
         for flag in ["-setwebproxy", "-setsecurewebproxy"] {
             let mut cmd = Command::new("networksetup");
-            cmd.args([flag, &service, "127.0.0.1", &port.to_string()]);
+            let host = if enabled { "127.0.0.1" } else if original_server.is_empty() { "127.0.0.1" } else { original_server };
+            let proxy_port = if enabled { port.to_string() } else if original_port.is_empty() { "0".into() } else { original_port.into() };
+            cmd.args([flag, &service, host, &proxy_port]);
             let result = cmd.output().map_err(|e| e.to_string())?;
             if !result.status.success() { return Err(String::from_utf8_lossy(&result.stderr).trim().to_string()); }
             let state = if flag == "-setwebproxy" { "-setwebproxystate" } else { "-setsecurewebproxystate" };
-            let result = Command::new("networksetup").args([state, &service, if enabled { "on" } else { "off" }]).output().map_err(|e| e.to_string())?;
+            let result = Command::new("networksetup").args([state, &service, if enabled || original_enabled { "on" } else { "off" }]).output().map_err(|e| e.to_string())?;
             if !result.status.success() { return Err(String::from_utf8_lossy(&result.stderr).trim().to_string()); }
         }
         return Ok(());
     }
     #[cfg(target_os = "linux")]
     {
-        let mode = if enabled { "manual" } else { "none" };
+        let mode = if enabled { "manual" } else {
+            let snapshot = std::fs::read_to_string(proxy_snapshot_path(&app)?).unwrap_or_default();
+            if snapshot.contains("'auto'") { "auto" } else { "none" }
+        };
         let status = Command::new("gsettings").args(["set", "org.gnome.system.proxy", "mode", mode]).status().map_err(|e| e.to_string())?;
         if !status.success() { return Err("gsettings 设置系统代理失败".into()); }
         if enabled {
