@@ -24,7 +24,7 @@ import {
 } from './core/browser-diagnostics.js';
 import { lookupIpProfile } from './core/ip-profile.js';
 import { applyRuntimeAction, getRuntimeConfig, getRuntimeStatus, rollbackRuntimeConfig, setRuntimeKind, updateRuntimeConfig } from './core/runtime.js';
-import { buildMihomoConfig, validateMihomoConfig } from './core/mihomo.js';
+import { buildMihomoConfig, mihomo, validateMihomoConfig } from './core/mihomo.js';
 import { listProviders, removeProvider, refreshProvider, upsertProvider } from './core/providers.js';
 import { listGroups, removeGroup, upsertGroup } from './core/groups.js';
 import { listRules, removeRule, upsertRule } from './core/rules.js';
@@ -372,8 +372,9 @@ app.post('/gateway/connectivity', async (c) => {
 });
 
 /** Local forwarding proxy: status, recent traffic, and strategy controls. */
-app.get('/gateway', (c) => {
+app.get('/gateway', async (c) => {
   const { active, current, routeFilters, routing, selectedService } = currentGatewayProxy();
+  const mihomoConnections = await mihomo.connections();
   return c.json({
     ...gatewayStats,
     strategy: picker.strategy,
@@ -397,7 +398,7 @@ app.get('/gateway', (c) => {
           active: active?.addr === current.addr,
         }
       : null,
-    traffic: traffic().slice(0, 30),
+    traffic: mihomoConnections.length ? mihomoConnections.map((item) => ({ at: item.start ? Date.parse(item.start) || Date.now() : Date.now(), target: item.metadata?.host ?? item.metadata?.destinationIP ?? '—', via: item.chains?.[0] ?? null, ms: 0, ok: true, source: 'mihomo', process: item.metadata?.process ?? null, rule: item.rule ?? null, upload: item.upload ?? 0, download: item.download ?? 0 })) : traffic().slice(0, 30).map((item) => ({ ...item, source: 'gateway', process: null, rule: null, upload: 0, download: 0 })),
   });
 });
 

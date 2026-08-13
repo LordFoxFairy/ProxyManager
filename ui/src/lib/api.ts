@@ -131,7 +131,7 @@ export interface Gateway {
     score: number;
     active: boolean;
   } | null;
-  traffic: { at: number; target: string; via: string | null; ms: number; ok: boolean }[];
+  traffic: { at: number; target: string; via: string | null; ms: number; ok: boolean; source?: 'mihomo' | 'gateway'; process?: string | null; rule?: string | null; upload?: number; download?: number }[];
 }
 
 export interface RuntimeConfig {

@@ -29,6 +29,17 @@ export interface MihomoConfig {
   tun?: { enable: true; stack: 'system' | 'gvisor' | 'mixed'; 'auto-route': boolean; 'auto-detect-interface': boolean; 'dns-hijack': string[] };
 }
 
+export interface MihomoConnection {
+  id: string;
+  metadata?: { host?: string; destinationIP?: string; destinationPort?: string; network?: string; type?: string; process?: string };
+  chains?: string[];
+  upload?: number;
+  download?: number;
+  start?: string;
+  rule?: string;
+  rulePayload?: string;
+}
+
 function nodeToMihomo(proxy: Proxy, index: number): MihomoProxy | null {
   const [server, portText] = proxy.addr.split(':');
   const port = Number(portText);
@@ -78,6 +89,18 @@ export class MihomoController {
   get running() { return Boolean(this.child && this.child.exitCode === null); }
   get error() { return this.lastError; }
   get path() { return this.configPath; }
+
+  async connections(): Promise<MihomoConnection[]> {
+    const controller = process.env.PM_MIHOMO_CONTROLLER ?? '127.0.0.1:9090';
+    if (!this.running) return [];
+    const signal = AbortSignal.timeout(1200);
+    try {
+      const response = await fetch(`http://${controller}/connections`, { signal });
+      if (!response.ok) return [];
+      const body = await response.json() as { connections?: MihomoConnection[] };
+      return Array.isArray(body.connections) ? body.connections.slice(0, 100) : [];
+    } catch { return []; }
+  }
 
   async start(config = getRuntimeConfig()): Promise<void> {
     if (this.running) return;

@@ -19,6 +19,7 @@ export function ConnectionsPage({ gateway }: { gateway: Gateway }) {
       <section className="work-panel connections-panel">
         <div className="work-panel-head">
           <div><strong>实时连接</strong><span>请求、命中用途与实际出口</span></div>
+          <span className="runtime-pill">{gateway.traffic.some((item) => item.source === 'mihomo') ? 'Mihomo API' : '内置网关记录'}</span>
           <span className={`runtime-pill${gateway.running ? ' online' : ''}`}>{gateway.running ? '网关运行中' : '网关未运行'}</span>
         </div>
         {gateway.traffic.length === 0 ? (
@@ -26,14 +27,15 @@ export function ConnectionsPage({ gateway }: { gateway: Gateway }) {
         ) : (
           <div className="table-wrap connection-table-wrap">
             <table>
-              <thead><tr><th>时间</th><th>目标</th><th>实际节点</th><th>耗时</th><th>结果</th><th /></tr></thead>
+              <thead><tr><th>时间</th><th>目标</th><th>实际节点</th><th>规则</th><th>流量</th><th>结果</th><th /></tr></thead>
               <tbody>
                 {gateway.traffic.map((traffic, index) => (
                   <tr key={`${traffic.at}-${index}`}>
                     <td className="mono muted">{new Date(traffic.at).toLocaleTimeString('zh-CN', { hour12: false })}</td>
                     <td className="addr">{traffic.target}</td>
                     <td className="mono muted">{traffic.via?.split('//')[1] ?? '—'}</td>
-                    <td className="mono">{traffic.ms}ms</td>
+                    <td className="mono muted">{traffic.rule ?? '—'}</td>
+                    <td className="mono">{traffic.download || traffic.upload ? `${Math.round((traffic.download ?? 0) / 1024)}K↓ ${Math.round((traffic.upload ?? 0) / 1024)}K↑` : `${traffic.ms}ms`}</td>
                     <td><span className={`badge ${traffic.ok ? 'badge-yes' : 'badge-no'}`}>{traffic.ok ? '成功' : '失败'}</span></td>
                     <td><ExternalLink size={13} className="muted" /></td>
                   </tr>
