@@ -513,21 +513,24 @@ function useProxyManagerState() {
 
   const saveRuntime = async (patch: Partial<RuntimeConfig> & { kind?: 'builtin' | 'mihomo' }) => {
     const previousSystemProxy = patch.systemProxy === undefined ? null : (systemProxyActual ?? runtimeConfig?.systemProxy ?? false);
-    if (patch.systemProxy !== undefined) {
-      try { await invoke('set_system_proxy', { enabled: patch.systemProxy, port: runtimeConfig?.mixedPort ?? 7899 }); }
+    const proxyEnabled = systemProxyActual ?? runtimeConfig?.systemProxy ?? false;
+    const proxyPortChanged = patch.mixedPort !== undefined && patch.mixedPort !== runtimeConfig?.mixedPort;
+    if (patch.systemProxy !== undefined || proxyPortChanged && proxyEnabled) {
+      const enabled = patch.systemProxy ?? proxyEnabled;
+      try { await invoke('set_system_proxy', { enabled, port: patch.mixedPort ?? runtimeConfig?.mixedPort ?? 7899 }); }
       catch (error) { setControlError(error instanceof Error ? error.message : '系统代理设置失败'); return; }
     }
     try {
       const next = await updateRuntime(patch);
       setRuntimeStatus(next.status);
       setRuntimeConfig(next.config);
-      if (patch.systemProxy !== undefined) {
-        const actual = await invoke<boolean>('system_proxy_status').catch(() => patch.systemProxy!);
+      if (patch.systemProxy !== undefined || proxyPortChanged) {
+        const actual = await invoke<boolean>('system_proxy_status').catch(() => patch.systemProxy ?? proxyEnabled);
         setSystemProxyActual(actual);
       }
     } catch (error) {
-      if (previousSystemProxy !== null && patch.systemProxy !== undefined && previousSystemProxy !== patch.systemProxy) {
-        await invoke('set_system_proxy', { enabled: previousSystemProxy, port: runtimeConfig?.mixedPort ?? 7899 }).catch(() => undefined);
+      if (proxyEnabled && (patch.systemProxy !== undefined || proxyPortChanged)) {
+        await invoke('set_system_proxy', { enabled: previousSystemProxy ?? proxyEnabled, port: runtimeConfig?.mixedPort ?? 7899 }).catch(() => undefined);
         setSystemProxyActual(previousSystemProxy);
       }
       setControlError(error instanceof Error ? error.message : 'Runtime 配置保存失败');
