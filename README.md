@@ -18,7 +18,7 @@ npm run dev collect          # 采集候选(约 5,900 个)
 npm run dev validate -n 700  # 校验
 npm run dev get -n 10 --https
 npm run dev serve            # API :8787 + 本地代理 :7899
-npm test                     # 44 个单元测试
+npm test                     # 46 个单元测试
 
 # 桌面应用(会自动拉起后端)
 cd ui && npm install && npm run tauri dev
@@ -116,6 +116,10 @@ p90 4.0s),不加迟滞会导致几乎每个请求都换节点,连接复用全废
 | `GET /diagnostics/browser/{id}` | 打开本机浏览器诊断页 |
 | `GET /diagnostics/browser/{id}/status` | 查询浏览器证据回传状态 |
 | `GET /diagnostics/ip-profile?ip=...` | 查询出口 IP 的 ASN、组织和网络类型画像 |
+| `GET /providers` | 订阅、固定节点和池 Provider 目录 |
+| `POST /providers` | 创建 Provider |
+| `PATCH /providers/{id}` | 更新 Provider 开关或节点 |
+| `POST /providers/{id}/refresh` | 拉取并解析订阅 Provider |
 
 `GET /proxies` 支持 `scheme`、`https`、`country`、`anonymity`、
 `min_score`、`target` 和 `search` 筛选。`target` 只返回对指定网站已有可用检测结果的
@@ -219,7 +223,8 @@ TUN 仍需各平台权限与虚拟网卡适配，界面保持“未支持”状�
 节点列表将代理地址与实际出口 IP 放在同一列，支持协议、HTTPS、评分、地区、匿名度、
 IP 和网站能力筛选。点击节点打开独立 Inspector；浏览节点只读取历史结果，只有显式执行
 “检测服务”或进入完整诊断才发起网络请求。Provider 页提供自动巡航、自动剔除、采集/复检
-间隔、单轮校验量、23 个逐源开关和单源立即执行。
+间隔、单轮校验量、23 个逐源开关和单源立即执行；同时可添加订阅、固定节点和长期 Provider，
+启用 Provider 的节点会与代理池节点一起编译进 Mihomo 代理组。
 
 诊断分为基础健康、服务能力、IP 画像、泄漏与环境。当前已实现出口 IP、地区、协议、延迟、
 基础健康证据，以及 OpenAI、Anthropic、GitHub 等目标服务检测；IP 画像通过 `ip-api` 获取

@@ -3,6 +3,7 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { getRuntimeConfig, type RuntimeConfig } from './runtime.js';
 import { get, type Proxy } from './store.js';
+import { providerNodes } from './providers.js';
 
 export interface MihomoProxy {
   name: string;
@@ -33,7 +34,9 @@ function nodeToMihomo(proxy: Proxy, index: number): MihomoProxy | null {
 
 export function buildMihomoConfig(config: RuntimeConfig, controller = '127.0.0.1:9090', secret = '', nodes: Proxy[] = get({ n: 200, minScore: 1, https: true })): MihomoConfig {
   const proxies = nodes.map(nodeToMihomo).filter((node): node is MihomoProxy => Boolean(node));
-  const names = proxies.map((proxy) => proxy.name);
+  const external = providerNodes().filter((node) => node.type === 'http' || node.type === 'socks5').map((node) => ({ ...node, udp: false })) as MihomoProxy[];
+  const merged = [...new Map([...proxies, ...external].map((node) => [node.name, node])).values()];
+  const names = merged.map((proxy) => proxy.name);
   return {
     'mixed-port': config.mixedPort,
     'allow-lan': false,
@@ -41,7 +44,7 @@ export function buildMihomoConfig(config: RuntimeConfig, controller = '127.0.0.1
     'log-level': 'info',
     'external-controller': controller,
     secret,
-    proxies,
+    proxies: merged,
     'proxy-groups': [{ name: 'PROXY', type: 'select', proxies: [...names, 'DIRECT'] }],
     rules: ['MATCH,PROXY'],
   };

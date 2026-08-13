@@ -1,0 +1,24 @@
+import { getSetting, setSetting } from './store.js';
+
+export type ProviderKind = 'subscription' | 'fixed' | 'pool';
+export interface ProviderNode { name: string; type: string; server: string; port: number; [key: string]: unknown; }
+export interface Provider { id: string; name: string; kind: ProviderKind; url: string | null; enabled: boolean; nodes: ProviderNode[]; updatedAt: number | null; lastError: string | null; }
+const KEY = 'providers.catalog';
+const read = (): Provider[] => { try { const value = JSON.parse(getSetting(KEY) ?? '[]'); return Array.isArray(value) ? value : []; } catch { return []; } };
+const write = (value: Provider[]) => setSetting(KEY, JSON.stringify(value));
+export function listProviders(): Provider[] { return read(); }
+export function upsertProvider(input: unknown): Provider {
+  const row = input && typeof input === 'object' ? input as Record<string, unknown> : {};
+  const id = String(row.id ?? `provider-${Date.now()}`).replace(/[^a-zA-Z0-9_-]/g, '-').slice(0, 64);
+  const current = read(); const previous = current.find((item) => item.id === id);
+  const provider: Provider = { id, name: String(row.name ?? previous?.name ?? id).slice(0, 80), kind: row.kind === 'fixed' ? 'fixed' : row.kind === 'pool' ? 'pool' : 'subscription', url: typeof row.url === 'string' && row.url.trim() ? row.url.trim().slice(0, 2048) : previous?.url ?? null, enabled: typeof row.enabled === 'boolean' ? row.enabled : previous?.enabled ?? true, nodes: Array.isArray(row.nodes) ? normalizeNodes(row.nodes) : previous?.nodes ?? [], updatedAt: typeof row.updatedAt === 'number' ? row.updatedAt : previous?.updatedAt ?? null, lastError: typeof row.lastError === 'string' ? row.lastError : previous?.lastError ?? null };
+  write([...current.filter((item) => item.id !== id), provider]); return provider;
+}
+export function removeProvider(id: string): boolean { const current = read(); const next = current.filter((item) => item.id !== id); if (next.length === current.length) return false; write(next); return true; }
+function normalizeNodes(input: unknown[]): ProviderNode[] { return input.map((item) => { const row = item && typeof item === 'object' ? item as Record<string, unknown> : {}; const port = Number(row.port); if (!row.name || !row.server || !Number.isInteger(port)) return null; return { ...row, name: String(row.name).slice(0, 120), type: String(row.type ?? 'http'), server: String(row.server), port } as ProviderNode; }).filter((item): item is ProviderNode => Boolean(item)).slice(0, 500); }
+function valueOf(block: string, key: string) { return block.match(new RegExp(`(?:^|\\n)\\s*${key}\\s*:\\s*["']?([^"'\\n]+)`))?.[1]?.trim(); }
+function decodeBase64(text: string): string | null { try { const decoded = Buffer.from(text.trim(), 'base64').toString('utf8'); return decoded.includes('://') || decoded.includes('proxies:') ? decoded : null; } catch { return null; } }
+function parseUri(line: string): ProviderNode | null { try { const url = new URL(line.trim()); const port = Number(url.port); const scheme = url.protocol.replace(':', ''); const type = scheme === 'socks5' || scheme === 'http' ? scheme : ''; if (!url.hostname || !port || !type) return null; return { name: decodeURIComponent(url.hash.slice(1)) || `${type}-${url.hostname}:${port}`, type, server: url.hostname, port }; } catch { return null; } }
+function parseText(text: string): ProviderNode[] { let value: unknown = null; try { value = JSON.parse(text); } catch {} if (value && typeof value === 'object' && Array.isArray((value as Record<string, unknown>).proxies)) return normalizeNodes((value as Record<string, unknown>).proxies as unknown[]); const source = decodeBase64(text) ?? text; const uriNodes = source.split(/\r?\n/).map(parseUri).filter((node): node is ProviderNode => Boolean(node)); if (uriNodes.length) return uriNodes; return normalizeNodes(source.split(/\n(?=\s*-\s*name\s*:)/).map((block) => { const name = valueOf(block, 'name'); const type = valueOf(block, 'type'); const server = valueOf(block, 'server'); const port = Number(valueOf(block, 'port')); return name && type && server && Number.isInteger(port) ? { name, type, server, port } : null; })); }
+export async function refreshProvider(id: string): Promise<Provider> { const provider = read().find((item) => item.id === id); if (!provider) throw new Error('Provider 不存在'); if (!provider.url) throw new Error('Provider 没有 URL'); const response = await fetch(provider.url, { signal: AbortSignal.timeout(30_000), headers: { 'user-agent': 'ProxyManager/0.1 provider' } }); if (!response.ok) throw new Error(`HTTP ${response.status}`); const nodes = parseText(await response.text()); if (!nodes.length) throw new Error('未解析出可用节点'); return upsertProvider({ ...provider, nodes, updatedAt: Date.now(), lastError: null }); }
+export function providerNodes(): ProviderNode[] { return read().filter((provider) => provider.enabled).flatMap((provider) => provider.nodes); }

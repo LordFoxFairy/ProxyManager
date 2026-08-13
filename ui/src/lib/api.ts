@@ -163,6 +163,13 @@ export const updateRuntime = (patch: Partial<RuntimeConfig> & { kind?: 'builtin'
 export const runtimeAction = (action: 'start' | 'stop' | 'restart') =>
   req<{ status: RuntimeStatus }>('/runtime/action', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ action }) });
 
+export interface ProviderNode { name: string; type: string; server: string; port: number; [key: string]: unknown; }
+export interface Provider { id: string; name: string; kind: 'subscription' | 'fixed' | 'pool'; url: string | null; enabled: boolean; nodes: ProviderNode[]; updatedAt: number | null; lastError: string | null; }
+export const getProviders = () => req<{ providers: Provider[] }>('/providers');
+export const saveProvider = (provider: Partial<Provider>) => req<Provider>('/providers', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(provider) });
+export const patchProvider = (id: string, patch: Partial<Provider>) => req<Provider>(`/providers/${encodeURIComponent(id)}`, { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify(patch) });
+export const refreshProvider = (id: string) => req<Provider>(`/providers/${encodeURIComponent(id)}/refresh`, { method: 'POST' });
+
 export interface AutomationSettings {
   enabled: boolean;
   autoPurgeEnabled: boolean;

@@ -25,6 +25,7 @@ import {
 import { lookupIpProfile } from './core/ip-profile.js';
 import { applyRuntimeAction, getRuntimeConfig, getRuntimeStatus, setRuntimeKind, updateRuntimeConfig } from './core/runtime.js';
 import { buildMihomoConfig, validateMihomoConfig } from './core/mihomo.js';
+import { listProviders, removeProvider, refreshProvider, upsertProvider } from './core/providers.js';
 import { gatewayStats, traffic } from './core/gateway.js';
 import { picker } from './core/picker.js';
 import {
@@ -102,6 +103,11 @@ app.get('/runtime/config-preview', (c) => {
   const errors = validateMihomoConfig(config);
   return c.json({ valid: errors.length === 0, errors, config: buildMihomoConfig(config) });
 });
+app.get('/providers', (c) => c.json({ providers: listProviders() }));
+app.post('/providers', async (c) => { let body: unknown = {}; try { body = await c.req.json(); } catch {} return c.json(upsertProvider(body)); });
+app.patch('/providers/:id', async (c) => { let body: unknown = {}; try { body = await c.req.json(); } catch {} return c.json(upsertProvider({ ...(body as object), id: c.req.param('id') })); });
+app.delete('/providers/:id', (c) => removeProvider(c.req.param('id')) ? c.json({ deleted: c.req.param('id') }) : c.json({ error: 'Provider 不存在' }, 404));
+app.post('/providers/:id/refresh', async (c) => { try { return c.json(await refreshProvider(c.req.param('id'))); } catch (error) { return c.json({ error: error instanceof Error ? error.message : 'Provider 更新失败' }, 409); } });
 
 app.post('/diagnostics/browser/session', (c) => {
   const session = createBrowserDiagnosticSession();
