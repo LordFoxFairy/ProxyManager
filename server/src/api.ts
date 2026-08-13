@@ -27,7 +27,7 @@ import { applyRuntimeAction, getRuntimeConfig, getRuntimeStatus, rollbackRuntime
 import { buildMihomoConfig, mihomo, validateMihomoConfig } from './core/mihomo.js';
 import { listProviders, removeProvider, refreshProvider, upsertProvider } from './core/providers.js';
 import { listGroups, removeGroup, upsertGroup } from './core/groups.js';
-import { listRuleProviders, listRules, removeRule, removeRuleProvider, upsertRule, upsertRuleProvider } from './core/rules.js';
+import { listRuleProviders, listRules, refreshRuleProvider, removeRule, removeRuleProvider, upsertRule, upsertRuleProvider } from './core/rules.js';
 import { exportConfigBundle, importConfigBundle } from './core/config-bundle.js';
 import { gatewayStats, traffic } from './core/gateway.js';
 import { picker } from './core/picker.js';
@@ -136,6 +136,7 @@ app.get('/rule-providers', (c) => c.json({ providers: listRuleProviders() }));
 app.post('/rule-providers', async (c) => { let body: unknown = {}; try { body = await c.req.json(); } catch {} const provider = upsertRuleProvider(body); await reloadMihomoIfRunning(); return c.json(provider); });
 app.patch('/rule-providers/:id', async (c) => { let body: unknown = {}; try { body = await c.req.json(); } catch {} const provider = upsertRuleProvider({ ...(body as object), id: c.req.param('id') }); await reloadMihomoIfRunning(); return c.json(provider); });
 app.delete('/rule-providers/:id', async (c) => { const deleted = removeRuleProvider(c.req.param('id')); if (deleted) await reloadMihomoIfRunning(); return deleted ? c.json({ deleted: c.req.param('id') }) : c.json({ error: '规则 Provider 不存在' }, 404); });
+app.post('/rule-providers/:id/refresh', async (c) => { try { const provider = await refreshRuleProvider(c.req.param('id')); await reloadMihomoIfRunning(); return c.json(provider); } catch (error) { return c.json({ error: error instanceof Error ? error.message : '规则 Provider 更新失败' }, 409); } });
 
 app.post('/diagnostics/browser/session', (c) => {
   const session = createBrowserDiagnosticSession();

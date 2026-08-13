@@ -39,6 +39,7 @@ import {
   patchRuleProvider,
   removeRuleProvider,
   saveRuleProvider,
+  refreshRuleProvider,
   exportConfig,
   importConfig,
   getProxies,
@@ -506,6 +507,7 @@ function useProxyManagerState() {
   const saveRuleProviderState = async (value: Partial<RuleProvider>) => { const next = await saveRuleProvider(value); setRuleProviders((current) => current.some((item) => item.id === next.id) ? current.map((item) => item.id === next.id ? next : item) : [...current, next]); return next; };
   const patchRuleProviderState = async (id: string, value: Partial<RuleProvider>) => { const next = await patchRuleProvider(id, value); setRuleProviders((current) => current.map((item) => item.id === id ? next : item)); return next; };
   const removeRuleProviderState = async (id: string) => { await removeRuleProvider(id); setRuleProviders((current) => current.filter((item) => item.id !== id)); };
+  const refreshRuleProviderState = async (id: string) => { const next = await refreshRuleProvider(id); setRuleProviders((current) => current.map((item) => item.id === id ? next : item)); return next; };
   const exportConfiguration = async () => { const bundle = await exportConfig(); const blob = new Blob([JSON.stringify(bundle, null, 2)], { type: 'application/json' }); const url = URL.createObjectURL(blob); const anchor = document.createElement('a'); anchor.href = url; anchor.download = `proxymanager-config-${new Date().toISOString().slice(0, 10)}.json`; anchor.click(); URL.revokeObjectURL(url); };
   const importConfiguration = async (file: File) => { const bundle = JSON.parse(await file.text()); await importConfig(bundle); await load(); };
 
@@ -591,7 +593,7 @@ function useProxyManagerState() {
   }, [toast]);
 
   return {
-    page, setPage, resourceView, setResourceView, stats, gateway, runtimeStatus, runtimeConfig, systemProxyActual, saveRuntime, runRuntimeAction, rollbackRuntimeConfig, exportConfiguration, importConfiguration, providers, groups, saveProxyGroup, patchProxyGroup, removeProxyGroup, rules, saveRoutingRule, patchRoutingRule, removeRoutingRule, ruleProviders, saveRuleProviderState, patchRuleProviderState, removeRuleProviderState, patchProvider, refreshProvider, saveProvider, control, automationDraft, setAutomationDraft, controlSaving,
+    page, setPage, resourceView, setResourceView, stats, gateway, runtimeStatus, runtimeConfig, systemProxyActual, saveRuntime, runRuntimeAction, rollbackRuntimeConfig, exportConfiguration, importConfiguration, providers, groups, saveProxyGroup, patchProxyGroup, removeProxyGroup, rules, saveRoutingRule, patchRoutingRule, removeRoutingRule, ruleProviders, saveRuleProviderState, patchRuleProviderState, removeRuleProviderState, refreshRuleProviderState, patchProvider, refreshProvider, saveProvider, control, automationDraft, setAutomationDraft, controlSaving,
     controlError, proxies, proxyTotal, proxyPage, setProxyPage, proxyPageSize, setProxyPageSize,
     proxyTotalPages, country, setCountry, anonymity, setAnonymity, minScore, setMinScore,
     targetFilter, setTargetFilter, proxySearch, setProxySearch, selectedProxy, setSelectedProxy,

@@ -191,11 +191,12 @@ export const getRules = () => req<{ rules: RoutingRule[] }>('/rules');
 export const saveRule = (rule: Partial<RoutingRule>) => req<RoutingRule>('/rules', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(rule) });
 export const patchRule = (id: string, patch: Partial<RoutingRule>) => req<RoutingRule>(`/rules/${encodeURIComponent(id)}`, { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify(patch) });
 export const removeRule = (id: string) => req<{ deleted: string }>(`/rules/${encodeURIComponent(id)}`, { method: 'DELETE' });
-export interface RuleProvider { id: string; name: string; url: string; behavior: 'domain' | 'classical' | 'ipcidr'; interval: number; enabled: boolean; }
+export interface RuleProvider { id: string; name: string; url: string; behavior: 'domain' | 'classical' | 'ipcidr'; interval: number; enabled: boolean; updatedAt: number | null; lastError: string | null; }
 export const getRuleProviders = () => req<{ providers: RuleProvider[] }>('/rule-providers');
 export const saveRuleProvider = (provider: Partial<RuleProvider>) => req<RuleProvider>('/rule-providers', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(provider) });
 export const patchRuleProvider = (id: string, patch: Partial<RuleProvider>) => req<RuleProvider>(`/rule-providers/${encodeURIComponent(id)}`, { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify(patch) });
 export const removeRuleProvider = (id: string) => req<{ deleted: string }>(`/rule-providers/${encodeURIComponent(id)}`, { method: 'DELETE' });
+export const refreshRuleProvider = (id: string) => req<RuleProvider>(`/rule-providers/${encodeURIComponent(id)}/refresh`, { method: 'POST' });
 export const exportConfig = () => req<Record<string, unknown>>('/config/export');
 export const importConfig = (bundle: unknown) => req<Record<string, unknown>>('/config/import', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(bundle) });
 
