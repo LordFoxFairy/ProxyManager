@@ -64,6 +64,29 @@ fn set_system_proxy(enabled: bool, port: u16) -> Result<(), String> {
     Err("当前平台不支持系统代理".into())
 }
 
+#[tauri::command]
+fn system_proxy_status() -> Result<bool, String> {
+    #[cfg(target_os = "macos")]
+    {
+        let output = Command::new("networksetup").args(["-getwebproxy", "Wi-Fi"]).output().map_err(|e| e.to_string())?;
+        let text = String::from_utf8_lossy(&output.stdout).to_ascii_lowercase();
+        return Ok(text.lines().any(|line| line.trim() == "enabled: yes"));
+    }
+    #[cfg(target_os = "linux")]
+    {
+        let output = Command::new("gsettings").args(["get", "org.gnome.system.proxy", "mode"]).output().map_err(|e| e.to_string())?;
+        return Ok(String::from_utf8_lossy(&output.stdout).contains("'manual'"));
+    }
+    #[cfg(target_os = "windows")]
+    {
+        let output = Command::new("netsh").args(["winhttp", "show", "proxy"]).output().map_err(|e| e.to_string())?;
+        let text = String::from_utf8_lossy(&output.stdout).to_ascii_lowercase();
+        return Ok(!text.contains("direct access") && !text.contains("no proxy"));
+    }
+    #[allow(unreachable_code)]
+    Err("当前平台不支持读取系统代理状态".into())
+}
+
 /// Handle to the Node backend so it can be killed when the window closes.
 /// Without this the server survives the UI and holds the port.
 struct Backend(Mutex<Option<Child>>);
@@ -128,7 +151,7 @@ pub fn run() {
                 let _ = window.set_focus();
             }
         }))
-        .invoke_handler(tauri::generate_handler![open_external_url, set_system_proxy])
+        .invoke_handler(tauri::generate_handler![open_external_url, set_system_proxy, system_proxy_status])
         .manage(Backend(Mutex::new(None)))
         .setup(|app| {
             if cfg!(debug_assertions) {

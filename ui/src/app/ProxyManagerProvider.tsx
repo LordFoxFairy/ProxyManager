@@ -79,6 +79,7 @@ function useProxyManagerState() {
   const [gateway, setGateway] = useState<Gateway | null>(null);
   const [runtimeStatus, setRuntimeStatus] = useState<RuntimeStatus | null>(null);
   const [runtimeConfig, setRuntimeConfig] = useState<RuntimeConfig | null>(null);
+  const [systemProxyActual, setSystemProxyActual] = useState<boolean | null>(null);
   const [providers, setProviders] = useState<Provider[]>([]);
   const [groups, setGroups] = useState<ProxyGroup[]>([]);
   const [rules, setRules] = useState<RoutingRule[]>([]);
@@ -178,6 +179,10 @@ function useProxyManagerState() {
     const timer = window.setInterval(load, 5000);
     return () => window.clearInterval(timer);
   }, [load]);
+
+  useEffect(() => {
+    void invoke<boolean>('system_proxy_status').then(setSystemProxyActual).catch(() => setSystemProxyActual(null));
+  }, [runtimeConfig?.systemProxy]);
 
   useEffect(() => {
     void getConnectivityTargets()
@@ -570,7 +575,7 @@ function useProxyManagerState() {
   }, [toast]);
 
   return {
-    page, setPage, resourceView, setResourceView, stats, gateway, runtimeStatus, runtimeConfig, saveRuntime, runRuntimeAction, rollbackRuntimeConfig, providers, groups, saveProxyGroup, patchProxyGroup, removeProxyGroup, rules, saveRoutingRule, patchRoutingRule, removeRoutingRule, patchProvider, refreshProvider, saveProvider, control, automationDraft, setAutomationDraft, controlSaving,
+    page, setPage, resourceView, setResourceView, stats, gateway, runtimeStatus, runtimeConfig, systemProxyActual, saveRuntime, runRuntimeAction, rollbackRuntimeConfig, providers, groups, saveProxyGroup, patchProxyGroup, removeProxyGroup, rules, saveRoutingRule, patchRoutingRule, removeRoutingRule, patchProvider, refreshProvider, saveProvider, control, automationDraft, setAutomationDraft, controlSaving,
     controlError, proxies, proxyTotal, proxyPage, setProxyPage, proxyPageSize, setProxyPageSize,
     proxyTotalPages, country, setCountry, anonymity, setAnonymity, minScore, setMinScore,
     targetFilter, setTargetFilter, proxySearch, setProxySearch, selectedProxy, setSelectedProxy,

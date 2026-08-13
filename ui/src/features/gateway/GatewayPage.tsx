@@ -13,6 +13,7 @@ export function GatewayPage({
   gateway,
   runtimeStatus,
   runtimeConfig,
+  systemProxyActual,
   onSaveRuntime,
   onRuntimeAction,
   onRollbackRuntime,
@@ -28,6 +29,7 @@ export function GatewayPage({
   gateway: Gateway;
   runtimeStatus: RuntimeStatus;
   runtimeConfig: RuntimeConfig;
+  systemProxyActual: boolean | null;
   onSaveRuntime: (patch: Partial<RuntimeConfig> & { kind?: 'builtin' | 'mihomo' }) => Promise<void>;
   onRuntimeAction: (action: 'start' | 'stop' | 'restart') => Promise<void>;
   onRollbackRuntime: () => Promise<void>;
@@ -78,7 +80,7 @@ export function GatewayPage({
         <div className="runtime-control-grid">
           <label><span>运行时内核</span><select value={runtimeStatus.kind} onChange={(event) => void onSaveRuntime({ kind: event.target.value as 'builtin' | 'mihomo' })}><option value="builtin">内置网关</option><option value="mihomo">Mihomo</option></select></label>
           <label><span>工作模式</span><select value={runtimeConfig.mode} onChange={(event) => void onSaveRuntime({ mode: event.target.value as RuntimeConfig['mode'] })}><option value="rule">规则模式</option><option value="global">全局模式</option><option value="direct">直连模式</option></select></label>
-          <button className={`runtime-toggle ${runtimeConfig.systemProxy ? 'active' : ''}`} disabled={!runtimeStatus.capabilities.systemProxy} onClick={() => toggleRuntime('systemProxy')}><strong>系统代理</strong><span>{runtimeStatus.systemProxy === 'unsupported' ? '需 Mihomo' : runtimeConfig.systemProxy ? '已开启' : '已关闭'}</span></button>
+          <button className={`runtime-toggle ${systemProxyActual ?? runtimeConfig.systemProxy ? 'active' : ''}`} disabled={!runtimeStatus.capabilities.systemProxy} onClick={() => toggleRuntime('systemProxy')}><strong>系统代理</strong><span>{runtimeStatus.systemProxy === 'unsupported' ? '需 Mihomo' : systemProxyActual == null ? '状态未知' : systemProxyActual ? '系统已开启' : '系统已关闭'}</span></button>
           <button className={`runtime-toggle ${runtimeConfig.tun ? 'active' : ''}`} disabled={!runtimeStatus.capabilities.tun} onClick={() => toggleRuntime('tun')}><strong>TUN 模式</strong><span>{runtimeStatus.tun === 'unsupported' ? '需 Mihomo + 系统权限' : runtimeConfig.tun ? '已开启' : '已关闭'}</span></button>
           <button className={`runtime-toggle ${runtimeConfig.dns ? 'active' : ''}`} disabled={!runtimeStatus.capabilities.dns} onClick={() => toggleRuntime('dns')}><strong>DNS 接管</strong><span>{runtimeStatus.dns === 'unsupported' ? '需 Mihomo' : runtimeConfig.dns ? `${runtimeConfig.dnsMode} · ${runtimeConfig.dnsListen}` : '已关闭'}</span></button>
         </div>
