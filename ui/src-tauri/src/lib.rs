@@ -68,6 +68,12 @@ fn set_system_proxy(enabled: bool, port: u16) -> Result<(), String> {
 /// Without this the server survives the UI and holds the port.
 struct Backend(Mutex<Option<Child>>);
 
+fn stop_backend(app: &tauri::AppHandle) {
+    if let Some(mut child) = app.state::<Backend>().0.lock().unwrap().take() {
+        let _ = child.kill();
+    }
+}
+
 /// Start the bundled server. In development it runs from source via the repo's
 /// `server/` directory; a packaged build uses the sidecar binary placed next to
 /// the app executable.
@@ -149,7 +155,10 @@ pub fn run() {
                             let _ = window.set_focus();
                         }
                     }
-                    "quit" => app.exit(0),
+                    "quit" => {
+                        stop_backend(app);
+                        app.exit(0);
+                    }
                     _ => {}
                 })
                 .build(app)?;
@@ -160,9 +169,7 @@ pub fn run() {
                 api.prevent_close();
                 let _ = window.hide();
             } else if let WindowEvent::Destroyed = event {
-                if let Some(mut child) = window.state::<Backend>().0.lock().unwrap().take() {
-                    let _ = child.kill();
-                }
+                stop_backend(window.app_handle());
             }
         })
         .run(tauri::generate_context!())
