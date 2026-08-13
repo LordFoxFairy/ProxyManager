@@ -1,4 +1,5 @@
 const BASE = import.meta.env.VITE_API ?? 'http://127.0.0.1:8787';
+export const API_BASE = BASE;
 
 export interface Proxy {
   url: string;
@@ -302,6 +303,7 @@ export const getIpProfile = (ip: string) => req<IpProfile>(`/diagnostics/ip-prof
 export const getGateway = () => req<Gateway>('/gateway');
 export interface MihomoConnectionItem { id: string; metadata?: { host?: string; destinationIP?: string; destinationPort?: string; network?: string; type?: string; process?: string }; chains?: string[]; upload?: number; download?: number; start?: string; rule?: string; rulePayload?: string; }
 export const getGatewayConnections = (params: { page?: number; pageSize?: number; search?: string; process?: string } = {}) => req<{ page: number; pageSize: number; total: number; totalPages: number; items: MihomoConnectionItem[] }>(`/gateway/connections?page=${params.page ?? 1}&page_size=${params.pageSize ?? 50}&search=${encodeURIComponent(params.search ?? '')}&process=${encodeURIComponent(params.process ?? '')}`);
+export const gatewayConnectionsStreamUrl = () => `${BASE}/gateway/connections/stream`;
 
 export const updateGatewayRouting = (routing: { profile?: string; country?: string | null }) =>
   req<{ routing: Gateway['routing']; profiles: Gateway['profiles'] }>('/gateway/routing', {
