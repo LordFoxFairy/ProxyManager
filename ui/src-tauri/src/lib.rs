@@ -15,9 +15,38 @@ fn snapshot_system_proxy(app: &tauri::AppHandle) -> Result<(), String> {
     let path = proxy_snapshot_path(app)?;
     if path.exists() { return Ok(()); }
     #[cfg(target_os = "macos")]
-    let value = Command::new("networksetup").args(["-getwebproxy", "Wi-Fi"]).output().map_err(|e| e.to_string())?.stdout;
+    let value = {
+        let services = Command::new("networksetup").arg("-listallnetworkservices").output().map_err(|e| e.to_string())?;
+        let service_text = String::from_utf8_lossy(&services.stdout);
+        let names = service_text.lines().map(str::trim)
+            .filter(|line| !line.is_empty() && !line.starts_with('*') && *line != "An asterisk (*) denotes that a network service is disabled.");
+        let mut out = String::new();
+        for name in names {
+            out.push_str("[service] "); out.push_str(name); out.push('\n');
+            for flag in ["-getwebproxy", "-getsecurewebproxy"] {
+                let result = Command::new("networksetup").args([flag, name]).output().map_err(|e| e.to_string())?;
+                out.push_str(flag); out.push('\n'); out.push_str(&String::from_utf8_lossy(&result.stdout));
+            }
+        }
+        out.into_bytes()
+    };
     #[cfg(target_os = "linux")]
-    let value = Command::new("gsettings").args(["get", "org.gnome.system.proxy", "mode"]).output().map_err(|e| e.to_string())?.stdout;
+    let value = {
+        let keys = [
+            ("mode", "org.gnome.system.proxy"),
+            ("http-host", "org.gnome.system.proxy.http"), ("http-port", "org.gnome.system.proxy.http"),
+            ("https-host", "org.gnome.system.proxy.https"), ("https-port", "org.gnome.system.proxy.https"),
+            ("ftp-host", "org.gnome.system.proxy.ftp"), ("ftp-port", "org.gnome.system.proxy.ftp"),
+            ("ignore-hosts", "org.gnome.system.proxy"),
+        ];
+        let mut out = String::new();
+        for (key, schema) in keys {
+            let gkey = if key == "mode" { "mode" } else if key == "ignore-hosts" { "ignore-hosts" } else { key.strip_suffix("-host").or_else(|| key.strip_suffix("-port")).unwrap_or(key) };
+            let result = Command::new("gsettings").args(["get", schema, gkey]).output().map_err(|e| e.to_string())?;
+            out.push_str(key); out.push('='); out.push_str(String::from_utf8_lossy(&result.stdout).trim()); out.push('\n');
+        }
+        out.into_bytes()
+    };
     #[cfg(target_os = "windows")]
     let value = Command::new("netsh").args(["winhttp", "show", "proxy"]).output().map_err(|e| e.to_string())?.stdout;
     #[allow(unreachable_code)]
@@ -48,28 +77,26 @@ fn set_system_proxy(app: tauri::AppHandle, enabled: bool, port: u16) -> Result<(
             .collect::<Vec<_>>();
         let service = services.iter().find(|name| *name == "Wi-Fi").or_else(|| services.iter().find(|name| *name == "Ethernet")).cloned().ok_or("未找到可用网络服务")?;
         let snapshot = if !enabled { std::fs::read_to_string(proxy_snapshot_path(&app)?).unwrap_or_default() } else { String::new() };
-        let original_server = snapshot.lines().find_map(|line| line.strip_prefix("Server: ")).unwrap_or("");
-        let original_port = snapshot.lines().find_map(|line| line.strip_prefix("Port: ")).unwrap_or("");
-        let original_enabled = snapshot.lines().any(|line| line.trim().eq_ignore_ascii_case("Enabled: Yes"));
-        for flag in ["-setwebproxy", "-setsecurewebproxy"] {
+        let section = snapshot.split("[service] ").find_map(|block| block.strip_prefix(service.as_str())).unwrap_or("");
+        for (get_flag, set_flag, state_flag) in [("-getwebproxy", "-setwebproxy", "-setwebproxystate"), ("-getsecurewebproxy", "-setsecurewebproxy", "-setsecurewebproxystate")] {
+            let original_server = section.lines().skip_while(|line| *line != get_flag).skip(1).find_map(|line| line.strip_prefix("Server: ")).unwrap_or("");
+            let original_port = section.lines().skip_while(|line| *line != get_flag).skip(1).find_map(|line| line.strip_prefix("Port: ")).unwrap_or("");
+            let original_enabled = section.lines().skip_while(|line| *line != get_flag).skip(1).any(|line| line.trim().eq_ignore_ascii_case("Enabled: Yes"));
             let mut cmd = Command::new("networksetup");
             let host = if enabled { "127.0.0.1" } else if original_server.is_empty() { "127.0.0.1" } else { original_server };
             let proxy_port = if enabled { port.to_string() } else if original_port.is_empty() { "0".into() } else { original_port.into() };
-            cmd.args([flag, &service, host, &proxy_port]);
+            cmd.args([set_flag, &service, host, &proxy_port]);
             let result = cmd.output().map_err(|e| e.to_string())?;
             if !result.status.success() { return Err(String::from_utf8_lossy(&result.stderr).trim().to_string()); }
-            let state = if flag == "-setwebproxy" { "-setwebproxystate" } else { "-setsecurewebproxystate" };
-            let result = Command::new("networksetup").args([state, &service, if enabled || original_enabled { "on" } else { "off" }]).output().map_err(|e| e.to_string())?;
+            let result = Command::new("networksetup").args([state_flag, &service, if enabled || original_enabled { "on" } else { "off" }]).output().map_err(|e| e.to_string())?;
             if !result.status.success() { return Err(String::from_utf8_lossy(&result.stderr).trim().to_string()); }
         }
         return Ok(());
     }
     #[cfg(target_os = "linux")]
     {
-        let mode = if enabled { "manual" } else {
-            let snapshot = std::fs::read_to_string(proxy_snapshot_path(&app)?).unwrap_or_default();
-            if snapshot.contains("'auto'") { "auto" } else { "none" }
-        };
+        let snapshot = std::fs::read_to_string(proxy_snapshot_path(&app)?).unwrap_or_default();
+        let mode = if enabled { "manual" } else { snapshot.lines().find_map(|line| line.strip_prefix("mode=")).unwrap_or("none").trim_matches('\'') };
         let status = Command::new("gsettings").args(["set", "org.gnome.system.proxy", "mode", mode]).status().map_err(|e| e.to_string())?;
         if !status.success() { return Err("gsettings 设置系统代理失败".into()); }
         if enabled {
@@ -79,12 +106,20 @@ fn set_system_proxy(app: tauri::AppHandle, enabled: bool, port: u16) -> Result<(
                 if !status.success() { return Err("gsettings 设置代理地址失败".into()); }
             }
         }
+        if !enabled {
+            for (line_key, schema, gkey) in [("http-host", "org.gnome.system.proxy.http", "host"), ("http-port", "org.gnome.system.proxy.http", "port"), ("https-host", "org.gnome.system.proxy.https", "host"), ("https-port", "org.gnome.system.proxy.https", "port"), ("ftp-host", "org.gnome.system.proxy.ftp", "host"), ("ftp-port", "org.gnome.system.proxy.ftp", "port"), ("ignore-hosts", "org.gnome.system.proxy", "ignore-hosts")] {
+                if let Some(value) = snapshot.lines().find_map(|line| line.strip_prefix(&format!("{}=", line_key))) {
+                    let status = Command::new("gsettings").args(["set", schema, gkey, value]).status().map_err(|e| e.to_string())?;
+                    if !status.success() { return Err("gsettings 恢复代理设置失败".into()); }
+                }
+            }
+        }
         return Ok(());
     }
     #[cfg(target_os = "windows")]
     {
         let snapshot = if !enabled { std::fs::read_to_string(proxy_snapshot_path(&app)?).unwrap_or_default() } else { String::new() };
-        let original = snapshot.lines().find_map(|line| line.split_once(':').map(|(_, value)| value.trim())).filter(|value| !value.is_empty() && !value.eq_ignore_ascii_case("direct access (no proxy server)"));
+        let original = snapshot.lines().find_map(|line| line.strip_prefix("Proxy Server(s) :").map(str::trim)).filter(|value| !value.is_empty() && !value.eq_ignore_ascii_case("(none)"));
         let value = if enabled { Some(format!("127.0.0.1:{}", port)) } else { original.map(str::to_string) };
         let args = if let Some(proxy) = value.as_deref() { vec!["winhttp", "set", "proxy", proxy] } else { vec!["winhttp", "reset", "proxy"] };
         let status = Command::new("netsh").args(args).status().map_err(|e| e.to_string())?;
@@ -118,11 +153,20 @@ fn system_proxy_status() -> Result<bool, String> {
     Err("当前平台不支持读取系统代理状态".into())
 }
 
+fn restore_system_proxy(app: &tauri::AppHandle) {
+    let path = match proxy_snapshot_path(app) { Ok(path) => path, Err(_) => return };
+    if !path.exists() { return; }
+    if set_system_proxy(app.clone(), false, 0).is_ok() {
+        let _ = std::fs::remove_file(path);
+    }
+}
+
 /// Handle to the Node backend so it can be killed when the window closes.
 /// Without this the server survives the UI and holds the port.
 struct Backend(Mutex<Option<Child>>);
 
 fn stop_backend(app: &tauri::AppHandle) {
+    restore_system_proxy(app);
     if let Some(mut child) = app.state::<Backend>().0.lock().unwrap().take() {
         let _ = child.kill();
     }
@@ -182,6 +226,7 @@ pub fn run() {
                 let _ = window.set_focus();
             }
         }))
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .invoke_handler(tauri::generate_handler![open_external_url, set_system_proxy, system_proxy_status])
         .manage(Backend(Mutex::new(None)))
         .setup(|app| {

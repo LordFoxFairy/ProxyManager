@@ -21,6 +21,7 @@ import {
   getBrowserDiagnosticStatus,
   getIpProfile,
   getRuntime,
+  probeRuntime,
   updateRuntime,
   runtimeAction,
   rollbackRuntime,
@@ -196,6 +197,20 @@ function useProxyManagerState() {
   useEffect(() => {
     void invoke<boolean>('system_proxy_status').then(setSystemProxyActual).catch(() => setSystemProxyActual(null));
   }, [runtimeConfig?.systemProxy]);
+
+  useEffect(() => {
+    if (!runtimeStatus || runtimeStatus.kind !== 'mihomo') return;
+    let cancelled = false;
+    const run = async () => {
+      try {
+        const next = await probeRuntime();
+        if (!cancelled) { setRuntimeStatus(next.status); setRuntimeConfig(next.config); }
+      } catch { /* the regular load path will surface backend failures */ }
+    };
+    void run();
+    const timer = window.setInterval(() => void run(), 5000);
+    return () => { cancelled = true; window.clearInterval(timer); };
+  }, [runtimeStatus?.kind]);
 
   useEffect(() => {
     void getConnectivityTargets()

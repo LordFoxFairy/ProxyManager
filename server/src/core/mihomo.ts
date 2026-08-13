@@ -98,15 +98,18 @@ export class MihomoController {
   get path() { return this.configPath; }
   get recovering() { return this.recoveryTimer !== null; }
 
-  async connections(): Promise<MihomoConnection[]> {
+  async connections(limit = 100): Promise<MihomoConnection[]> {
     const controller = process.env.PM_MIHOMO_CONTROLLER ?? '127.0.0.1:9090';
     if (!this.running) return [];
     const signal = AbortSignal.timeout(1200);
     try {
-      const response = await fetch(`http://${controller}/connections`, { signal });
+      const headers: Record<string, string> = {};
+      const secret = process.env.PM_MIHOMO_SECRET ?? '';
+      if (secret) headers.authorization = `Bearer ${secret}`;
+      const response = await fetch(`http://${controller}/connections`, { signal, headers });
       if (!response.ok) return [];
       const body = await response.json() as { connections?: MihomoConnection[] };
-      return Array.isArray(body.connections) ? body.connections.slice(0, 100) : [];
+      return Array.isArray(body.connections) ? body.connections.slice(0, Math.max(1, Math.min(limit, 500))) : [];
     } catch { return []; }
   }
 

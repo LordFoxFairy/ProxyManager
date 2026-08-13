@@ -1,8 +1,10 @@
 import { getSetting, setSetting } from './store.js';
 import { mihomo } from './mihomo.js';
+import { createConnection } from 'node:net';
 
 export type RuntimeKind = 'builtin' | 'mihomo';
 export type RuntimeLifecycle = 'stopped' | 'running' | 'degraded' | 'error';
+export type RuntimeFeatureState = 'active' | 'configured' | 'inactive' | 'unsupported' | 'permission-required' | 'failed' | 'unknown';
 
 export interface RuntimeConfig {
   mode: 'rule' | 'global' | 'direct';
@@ -32,6 +34,7 @@ export interface RuntimeStatus {
   tun: 'on' | 'off' | 'unsupported';
   dns: 'on' | 'off' | 'unsupported';
   capabilities: { systemProxy: boolean; tun: boolean; dns: boolean; mihomo: boolean };
+  features: { controller: RuntimeFeatureState; tun: RuntimeFeatureState; dns: RuntimeFeatureState };
   lastError: string | null;
 }
 
@@ -122,14 +125,57 @@ export function getRuntimeStatus(): RuntimeStatus {
     kind,
     lifecycle: kind === 'mihomo' ? (mihomo.running ? 'running' : mihomo.recovering ? 'error' : mihomo.error ? 'error' : mihomoAvailable ? 'stopped' : 'degraded') : builtinRunning ? 'running' : 'stopped',
     version: kind === 'mihomo' && mihomoAvailable ? 'sidecar-configured' : kind === 'builtin' ? 'builtin-gateway' : null,
-    controller: kind === 'mihomo' ? getSetting('runtime.controller') : null,
+    controller: kind === 'mihomo' ? (process.env.PM_MIHOMO_CONTROLLER ?? getSetting('runtime.controller')) : null,
     configVersion: readVersion(),
     configValid: config.mixedPort !== config.socksPort && config.mixedPort !== config.httpPort,
     systemProxy: kind === 'mihomo' && !mihomoAvailable ? 'unsupported' : config.systemProxy ? 'on' : 'off',
     tun: kind === 'mihomo' && mihomoAvailable ? (config.tun ? 'on' : 'off') : 'unsupported',
     dns: kind === 'mihomo' && mihomoAvailable ? (config.dns ? 'on' : 'off') : 'unsupported',
     capabilities: { systemProxy: kind === 'mihomo' && mihomoAvailable, tun: kind === 'mihomo' && mihomoAvailable, dns: kind === 'mihomo' && mihomoAvailable, mihomo: mihomoAvailable },
+    features: {
+      controller: kind === 'mihomo' && mihomoAvailable ? (mihomo.running ? 'unknown' : 'inactive') : 'unsupported',
+      tun: kind === 'mihomo' && mihomoAvailable ? (config.tun ? 'configured' : 'inactive') : 'unsupported',
+      dns: kind === 'mihomo' && mihomoAvailable ? (config.dns ? 'configured' : 'inactive') : 'unsupported',
+    },
     lastError: mihomo.error ?? (kind === 'mihomo' && !mihomoAvailable ? '未配置 PM_MIHOMO_BIN' : null),
+  };
+}
+
+function tcpProbe(address: string, timeoutMs = 700): Promise<boolean> {
+  const match = address.match(/^\[?([^\]]+)\]?:([0-9]+)$/);
+  if (!match) return Promise.resolve(false);
+  const host = match[1] === '0.0.0.0' || match[1] === '::' ? '127.0.0.1' : match[1];
+  const port = Number(match[2]);
+  return new Promise((resolve) => {
+    const socket = createConnection({ host, port });
+    const timer = setTimeout(() => { socket.destroy(); resolve(false); }, timeoutMs);
+    socket.once('connect', () => { clearTimeout(timer); socket.destroy(); resolve(true); });
+    socket.once('error', () => { clearTimeout(timer); resolve(false); });
+  });
+}
+
+export async function probeRuntimeStatus(): Promise<RuntimeStatus> {
+  const base = getRuntimeStatus();
+  if (base.kind !== 'mihomo' || !base.capabilities.mihomo) return base;
+  if (!mihomo.running) return { ...base, features: { ...base.features, controller: 'inactive', tun: base.tun === 'on' ? 'failed' : 'inactive', dns: base.dns === 'on' ? 'failed' : 'inactive' }, lastError: base.lastError ?? 'Mihomo 未运行' };
+  const controller = base.controller ?? process.env.PM_MIHOMO_CONTROLLER ?? '127.0.0.1:9090';
+  let controllerOk = false;
+  try {
+    const response = await fetch(`http://${controller}/version`, { signal: AbortSignal.timeout(1000) });
+    controllerOk = response.ok;
+  } catch { /* controller is not reachable */ }
+  const config = getRuntimeConfig();
+  const dnsOk = config.dns ? await tcpProbe(config.dnsListen) : false;
+  return {
+    ...base,
+    features: {
+      controller: controllerOk ? 'active' : 'failed',
+      dns: !config.dns ? 'inactive' : dnsOk ? 'active' : 'failed',
+      // A running controller with an enabled TUN config proves the daemon accepted it,
+      // but only a platform helper can prove a system route was installed.
+      tun: !config.tun ? 'inactive' : controllerOk ? 'configured' : 'failed',
+    },
+    lastError: controllerOk ? base.lastError : 'Mihomo controller 不可达',
   };
 }
 

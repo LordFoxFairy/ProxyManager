@@ -27,6 +27,9 @@ jobs:
     runs-on: ${{ matrix.os }}
     env:
       CI: true
+      TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+      TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+      TAURI_UPDATER_PUBKEY: ${{ secrets.TAURI_UPDATER_PUBKEY }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -131,3 +134,4 @@ jobs:
             This release includes the bundled control plane and Tauri desktop shell.
           releaseDraft: false
           prerelease: false
+          args: "--config {\"plugins\":{\"updater\":{\"pubkey\":\"${{ secrets.TAURI_UPDATER_PUBKEY }}\"}}}"

@@ -25,6 +25,15 @@
       "csp": null
     }
   },
+  "plugins": {
+    "updater": {
+      "pubkey": "${TAURI_UPDATER_PUBKEY}",
+      "endpoints": [
+        "https://github.com/LordFoxFairy/ProxyManager/releases/latest/download/latest.json"
+      ],
+      "dangerousInsecureTransportProtocol": false
+    }
+  },
   "bundle": {
     "active": true,
     "targets": "all",

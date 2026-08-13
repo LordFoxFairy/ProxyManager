@@ -25,7 +25,7 @@ import {
   renderBrowserDiagnosticPage,
 } from './core/browser-diagnostics.js';
 import { lookupIpProfile } from './core/ip-profile.js';
-import { applyRuntimeAction, getRuntimeConfig, getRuntimeStatus, rollbackRuntimeConfig, setRuntimeKind, updateRuntimeConfig } from './core/runtime.js';
+import { applyRuntimeAction, getRuntimeConfig, getRuntimeStatus, probeRuntimeStatus, rollbackRuntimeConfig, setRuntimeKind, updateRuntimeConfig } from './core/runtime.js';
 import { buildMihomoConfig, mihomo, validateMihomoConfig } from './core/mihomo.js';
 import { listProviders, removeProvider, refreshProvider, upsertProvider } from './core/providers.js';
 import { listGroups, removeGroup, upsertGroup } from './core/groups.js';
@@ -85,6 +85,7 @@ app.use('*', cors());
 app.get('/health', (c) => c.json({ ok: true }));
 
 app.get('/runtime', (c) => c.json({ status: getRuntimeStatus(), config: getRuntimeConfig() }));
+app.get('/runtime/probe', async (c) => c.json({ status: await probeRuntimeStatus(), config: getRuntimeConfig() }));
 const reloadMihomoIfRunning = async () => {
   if (getRuntimeStatus().kind !== 'mihomo' || !mihomo.running) return null;
   try { await applyRuntimeAction('restart'); } catch { /* status carries the error */ }
@@ -421,6 +422,40 @@ app.get('/gateway', async (c) => {
       : null,
     traffic: mihomoConnections.length ? mihomoConnections.map((item) => ({ at: item.start ? Date.parse(item.start) || Date.now() : Date.now(), target: item.metadata?.host ?? item.metadata?.destinationIP ?? '—', via: item.chains?.[0] ?? null, ms: 0, ok: true, source: 'mihomo', process: item.metadata?.process ?? null, rule: item.rule ?? null, upload: item.upload ?? 0, download: item.download ?? 0 })) : traffic().slice(0, 30).map((item) => ({ ...item, source: 'gateway', process: null, rule: null, upload: 0, download: 0 })),
   });
+});
+
+app.get('/gateway/connections', async (c) => {
+  const page = Math.max(1, Number(c.req.query('page') ?? 1) || 1);
+  const pageSize = Math.max(1, Math.min(100, Number(c.req.query('page_size') ?? 50) || 50));
+  const search = c.req.query('search')?.trim().toLowerCase() ?? '';
+  const process = c.req.query('process')?.trim().toLowerCase() ?? '';
+  const all = await mihomo.connections(500);
+  const filtered = all.filter((item) => {
+    const target = `${item.metadata?.host ?? ''} ${item.metadata?.destinationIP ?? ''} ${item.rule ?? ''}`.toLowerCase();
+    const proc = (item.metadata?.process ?? '').toLowerCase();
+    return (!search || target.includes(search)) && (!process || proc.includes(process));
+  });
+  const total = filtered.length;
+  const items = filtered.slice((page - 1) * pageSize, page * pageSize);
+  return c.json({ page, pageSize, total, totalPages: Math.max(1, Math.ceil(total / pageSize)), items });
+});
+
+app.get('/gateway/connections/stream', async (c) => {
+  const encoder = new TextEncoder();
+  const stream = new ReadableStream({
+    async start(controller) {
+      let closed = false;
+      const write = async () => {
+        if (closed) return;
+        const items = await mihomo.connections(200);
+        controller.enqueue(encoder.encode(`event: connections\ndata: ${JSON.stringify({ at: Date.now(), items })}\n\n`));
+      };
+      await write();
+      const timer = setInterval(() => { void write(); }, 2000);
+      setTimeout(() => { closed = true; clearInterval(timer); try { controller.close(); } catch {} }, 60_000);
+    },
+  });
+  return new Response(stream, { headers: { 'content-type': 'text/event-stream', 'cache-control': 'no-cache', connection: 'keep-alive' } });
 });
 
 app.post('/gateway/strategy', (c) => {
