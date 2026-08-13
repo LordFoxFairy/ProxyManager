@@ -197,8 +197,12 @@ fn tun_status() -> Result<serde_json::Value, String> {
         let device = std::path::Path::new("/dev/net/tun").exists();
         let output = Command::new("ip").args(["-o", "link", "show"]).output();
         let text = output.as_ref().map(|value| String::from_utf8_lossy(&value.stdout).to_ascii_lowercase()).unwrap_or_default();
-        let active = text.lines().any(|line| line.contains(": tun") || line.contains(" mihomo"));
-        return Ok(serde_json::json!({ "state": if active { "active" } else if device { "inactive" } else { "permission-required" }, "active": active, "device": device, "detail": if active { "TUN 接口已创建" } else if device { "设备可用，等待 Mihomo 创建接口" } else { "缺少 /dev/net/tun" } }));
+        let interfaces = text.lines().filter_map(|line| {
+            let name = line.split_whitespace().nth(1)?.trim_end_matches(':');
+            (name.starts_with("tun") || name.starts_with("utun") || name.contains("mihomo")).then(|| name.to_string())
+        }).collect::<Vec<_>>();
+        let active = !interfaces.is_empty();
+        return Ok(serde_json::json!({ "state": if active { "active" } else if device { "inactive" } else { "permission-required" }, "active": active, "device": device, "interfaces": interfaces, "detail": if active { "TUN 接口已创建" } else if device { "设备可用，等待 Mihomo 创建接口" } else { "缺少 /dev/net/tun" } }));
     }
     #[cfg(target_os = "macos")]
     {
