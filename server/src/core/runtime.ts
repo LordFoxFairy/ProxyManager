@@ -120,7 +120,7 @@ export function getRuntimeStatus(): RuntimeStatus {
   const mihomoAvailable = Boolean(process.env.PM_MIHOMO_BIN);
   return {
     kind,
-    lifecycle: kind === 'mihomo' ? (mihomo.running ? 'running' : mihomoAvailable ? 'stopped' : 'degraded') : builtinRunning ? 'running' : 'stopped',
+    lifecycle: kind === 'mihomo' ? (mihomo.running ? 'running' : mihomo.recovering ? 'error' : mihomo.error ? 'error' : mihomoAvailable ? 'stopped' : 'degraded') : builtinRunning ? 'running' : 'stopped',
     version: kind === 'mihomo' && mihomoAvailable ? 'sidecar-configured' : kind === 'builtin' ? 'builtin-gateway' : null,
     controller: kind === 'mihomo' ? getSetting('runtime.controller') : null,
     configVersion: readVersion(),

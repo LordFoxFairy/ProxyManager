@@ -89,10 +89,14 @@ export class MihomoController {
   private child: ChildProcess | null = null;
   private lastError: string | null = null;
   private configPath: string | null = null;
+  private intentionalStop = false;
+  private recoveryAttempts = 0;
+  private recoveryTimer: NodeJS.Timeout | null = null;
 
   get running() { return Boolean(this.child && this.child.exitCode === null); }
   get error() { return this.lastError; }
   get path() { return this.configPath; }
+  get recovering() { return this.recoveryTimer !== null; }
 
   async connections(): Promise<MihomoConnection[]> {
     const controller = process.env.PM_MIHOMO_CONTROLLER ?? '127.0.0.1:9090';
@@ -108,6 +112,8 @@ export class MihomoController {
 
   async start(config = getRuntimeConfig()): Promise<void> {
     if (this.running) return;
+    if (this.recoveryTimer) { clearTimeout(this.recoveryTimer); this.recoveryTimer = null; }
+    this.intentionalStop = false;
     const binary = process.env.PM_MIHOMO_BIN;
     if (!binary) throw new Error('未配置 PM_MIHOMO_BIN');
     const errors = validateMihomoConfig(config);
@@ -120,7 +126,10 @@ export class MihomoController {
     this.child = spawn(binary, ['-d', directory, '-f', this.configPath], { stdio: 'ignore' });
     this.child.once('error', (error) => { this.lastError = error.message; this.child = null; });
     this.child.once('exit', (code, signal) => {
-      if (code !== 0 && signal !== 'SIGTERM') this.lastError = `Mihomo 已退出 (${code ?? signal ?? 'unknown'})`;
+      if (!this.intentionalStop && (code !== 0 || signal !== 'SIGTERM')) {
+        this.lastError = `Mihomo 已退出 (${code ?? signal ?? 'unknown'})`;
+        this.scheduleRecovery(config);
+      }
       this.child = null;
     });
     await new Promise<void>((resolve, reject) => {
@@ -132,6 +141,9 @@ export class MihomoController {
   }
 
   async stop(): Promise<void> {
+    this.intentionalStop = true;
+    this.recoveryAttempts = 0;
+    if (this.recoveryTimer) { clearTimeout(this.recoveryTimer); this.recoveryTimer = null; }
     if (!this.child) return;
     const child = this.child;
     child.kill('SIGTERM');
@@ -140,6 +152,16 @@ export class MihomoController {
       child.once('exit', () => { clearTimeout(timer); resolve(); });
     });
     this.child = null;
+  }
+
+  private scheduleRecovery(config: RuntimeConfig) {
+    if (this.recoveryTimer || this.recoveryAttempts >= 3) return;
+    const delay = 500 * 2 ** this.recoveryAttempts;
+    this.recoveryAttempts += 1;
+    this.recoveryTimer = setTimeout(() => {
+      this.recoveryTimer = null;
+      void this.start(config).then(() => { this.recoveryAttempts = 0; }).catch(() => this.scheduleRecovery(config));
+    }, delay);
   }
 }
 
