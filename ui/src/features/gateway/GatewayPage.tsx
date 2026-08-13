@@ -1,7 +1,7 @@
 import { Activity, Check, Copy, Globe, Network, Plug, Radar } from 'lucide-react';
 import { Stat } from '../../components/Pieces';
 import { SelectMenu, type SelectOption } from '../../components/SelectMenu';
-import { setStrategy, type Gateway, type RuntimeConfig, type RuntimeStatus, type Strategy } from '../../lib/api';
+import { setStrategy, type DesktopUpdate, type Gateway, type RuntimeConfig, type RuntimeStatus, type Strategy } from '../../lib/api';
 
 const STRATEGIES: { id: Strategy; label: string; hint: string }[] = [
   { id: 'url-test', label: '最优节点', hint: '选择低延迟节点，并以迟滞值抑制频繁切换' },
@@ -19,6 +19,10 @@ export function GatewayPage({
   onRollbackRuntime,
   onExportConfig,
   onImportConfig,
+  desktopUpdate,
+  desktopUpdateBusy,
+  onCheckDesktopUpdate,
+  onInstallDesktopUpdate,
   copied,
   routingSaving,
   routingError,
@@ -37,6 +41,10 @@ export function GatewayPage({
   onRollbackRuntime: () => Promise<void>;
   onExportConfig: () => Promise<void>;
   onImportConfig: (file: File) => Promise<void>;
+  desktopUpdate: DesktopUpdate | null;
+  desktopUpdateBusy: boolean;
+  onCheckDesktopUpdate: () => Promise<void>;
+  onInstallDesktopUpdate: () => Promise<void>;
   copied: string;
   routingSaving: boolean;
   routingError: string;
@@ -79,7 +87,7 @@ export function GatewayPage({
       <section className="runtime-control-panel">
         <div className="runtime-control-head">
           <div><strong>运行时</strong><span>{runtimeStatus.kind === 'mihomo' ? 'Mihomo sidecar' : '内置代理池网关'} · 配置 v{runtimeStatus.configVersion}</span></div>
-          <div className="runtime-control-actions"><span className={`runtime-pill${runtimeStatus.lifecycle === 'running' ? ' online' : ''}`}>{runtimeStatus.lifecycle === 'running' ? '运行中' : runtimeStatus.lifecycle === 'degraded' ? '能力不完整' : runtimeStatus.lifecycle}</span>{runtimeStatus.kind === 'mihomo' && <><button className="btn btn-icon" title="重启 Mihomo" onClick={() => void onRuntimeAction('restart')}>↻</button><button className="btn" onClick={() => void onRollbackRuntime()}>回滚配置</button></>}<button className="btn" onClick={() => void onExportConfig()}>导出配置</button><label className="btn">导入配置<input type="file" accept="application/json" hidden onChange={(event) => { const file = event.target.files?.[0]; if (file) void onImportConfig(file); event.currentTarget.value = ''; }} /></label></div>
+          <div className="runtime-control-actions"><span className={`runtime-pill${runtimeStatus.lifecycle === 'running' ? ' online' : ''}`}>{runtimeStatus.lifecycle === 'running' ? '运行中' : runtimeStatus.lifecycle === 'degraded' ? '能力不完整' : runtimeStatus.lifecycle}</span>{runtimeStatus.kind === 'mihomo' && <><button className="btn btn-icon" title="重启 Mihomo" onClick={() => void onRuntimeAction('restart')}>↻</button><button className="btn" onClick={() => void onRollbackRuntime()}>回滚配置</button></>}<button className="btn" onClick={() => void onExportConfig()}>导出配置</button><label className="btn">导入配置<input type="file" accept="application/json" hidden onChange={(event) => { const file = event.target.files?.[0]; if (file) void onImportConfig(file); event.currentTarget.value = ''; }} /></label><button className="btn" disabled={desktopUpdateBusy} onClick={() => void onCheckDesktopUpdate()}>{desktopUpdateBusy ? '检查中…' : '检查更新'}</button>{desktopUpdate?.available && <button className="btn btn-primary" disabled={desktopUpdateBusy} onClick={() => void onInstallDesktopUpdate()}>安装 {desktopUpdate.version}</button>}</div>
         </div>
         <div className="runtime-control-grid">
           <label><span>运行时内核</span><select value={runtimeStatus.kind} onChange={(event) => void onSaveRuntime({ kind: event.target.value as 'builtin' | 'mihomo' })}><option value="builtin">内置网关</option><option value="mihomo">Mihomo</option></select></label>

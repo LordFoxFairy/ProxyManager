@@ -66,6 +66,7 @@ import {
   type ProxyGroup,
   type RoutingRule,
   type RuleProvider,
+  type DesktopUpdate,
 } from '../lib/api';
 import { invoke } from '@tauri-apps/api/core';
 import type { SelectOption } from '../components/SelectMenu';
@@ -140,6 +141,8 @@ function useProxyManagerState() {
   const [toast, setToast] = useState<ToastMessage | null>(null);
   const [gatewayRoutingSaving, setGatewayRoutingSaving] = useState(false);
   const [gatewayRoutingError, setGatewayRoutingError] = useState('');
+  const [desktopUpdate, setDesktopUpdate] = useState<DesktopUpdate | null>(null);
+  const [desktopUpdateBusy, setDesktopUpdateBusy] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -505,6 +508,18 @@ function useProxyManagerState() {
     }
   };
   const rollbackRuntimeConfig = async () => { const next = await rollbackRuntime(); setRuntimeStatus(next.status); setRuntimeConfig(next.config); };
+  const checkDesktopUpdate = async () => {
+    setDesktopUpdateBusy(true);
+    try { setDesktopUpdate(await invoke<DesktopUpdate>('check_for_update')); }
+    catch (error) { setControlError(error instanceof Error ? error.message : '更新检查失败'); }
+    finally { setDesktopUpdateBusy(false); }
+  };
+  const installDesktopUpdate = async () => {
+    setDesktopUpdateBusy(true);
+    try { setDesktopUpdate(await invoke<DesktopUpdate & { installed?: boolean }>('install_update')); }
+    catch (error) { setControlError(error instanceof Error ? error.message : '更新安装失败'); }
+    finally { setDesktopUpdateBusy(false); }
+  };
 
   const resetProxyFilters = () => {
     setScheme('');
@@ -611,7 +626,7 @@ function useProxyManagerState() {
   }, [toast]);
 
   return {
-    page, setPage, resourceView, setResourceView, stats, gateway, runtimeStatus, runtimeConfig, systemProxyActual, saveRuntime, runRuntimeAction, rollbackRuntimeConfig, exportConfiguration, importConfiguration, providers, groups, saveProxyGroup, patchProxyGroup, removeProxyGroup, rules, saveRoutingRule, patchRoutingRule, removeRoutingRule, ruleProviders, saveRuleProviderState, patchRuleProviderState, removeRuleProviderState, refreshRuleProviderState, patchProvider, refreshProvider, saveProvider, control, automationDraft, setAutomationDraft, controlSaving,
+    page, setPage, resourceView, setResourceView, stats, gateway, runtimeStatus, runtimeConfig, systemProxyActual, saveRuntime, runRuntimeAction, rollbackRuntimeConfig, exportConfiguration, importConfiguration, desktopUpdate, desktopUpdateBusy, checkDesktopUpdate, installDesktopUpdate, providers, groups, saveProxyGroup, patchProxyGroup, removeProxyGroup, rules, saveRoutingRule, patchRoutingRule, removeRoutingRule, ruleProviders, saveRuleProviderState, patchRuleProviderState, removeRuleProviderState, refreshRuleProviderState, patchProvider, refreshProvider, saveProvider, control, automationDraft, setAutomationDraft, controlSaving,
     controlError, proxies, proxyTotal, proxyPage, setProxyPage, proxyPageSize, setProxyPageSize,
     proxyTotalPages, country, setCountry, anonymity, setAnonymity, minScore, setMinScore,
     targetFilter, setTargetFilter, proxySearch, setProxySearch, selectedProxy, setSelectedProxy,

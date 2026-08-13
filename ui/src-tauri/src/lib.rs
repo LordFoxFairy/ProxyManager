@@ -34,15 +34,14 @@ fn snapshot_system_proxy(app: &tauri::AppHandle) -> Result<(), String> {
     #[cfg(target_os = "linux")]
     let value = {
         let keys = [
-            ("mode", "org.gnome.system.proxy"),
-            ("http-host", "org.gnome.system.proxy.http"), ("http-port", "org.gnome.system.proxy.http"),
-            ("https-host", "org.gnome.system.proxy.https"), ("https-port", "org.gnome.system.proxy.https"),
-            ("ftp-host", "org.gnome.system.proxy.ftp"), ("ftp-port", "org.gnome.system.proxy.ftp"),
-            ("ignore-hosts", "org.gnome.system.proxy"),
+            ("mode", "org.gnome.system.proxy", "mode"),
+            ("http-host", "org.gnome.system.proxy.http", "host"), ("http-port", "org.gnome.system.proxy.http", "port"),
+            ("https-host", "org.gnome.system.proxy.https", "host"), ("https-port", "org.gnome.system.proxy.https", "port"),
+            ("ftp-host", "org.gnome.system.proxy.ftp", "host"), ("ftp-port", "org.gnome.system.proxy.ftp", "port"),
+            ("ignore-hosts", "org.gnome.system.proxy", "ignore-hosts"),
         ];
         let mut out = String::new();
-        for (key, schema) in keys {
-            let gkey = if key == "mode" { "mode" } else if key == "ignore-hosts" { "ignore-hosts" } else { key.strip_suffix("-host").or_else(|| key.strip_suffix("-port")).unwrap_or(key) };
+        for (key, schema, gkey) in keys {
             let result = Command::new("gsettings").args(["get", schema, gkey]).output().map_err(|e| e.to_string())?;
             out.push_str(key); out.push('='); out.push_str(String::from_utf8_lossy(&result.stdout).trim()); out.push('\n');
         }
@@ -81,6 +80,15 @@ async fn check_for_update(app: tauri::AppHandle) -> Result<serde_json::Value, St
 }
 
 #[tauri::command]
+async fn install_update(app: tauri::AppHandle) -> Result<serde_json::Value, String> {
+    let update = app.updater().map_err(|e| e.to_string())?.check().await.map_err(|e| e.to_string())?;
+    let Some(update) = update else { return Ok(serde_json::json!({ "available": false })); };
+    let version = update.version.clone();
+    update.download_and_install(|_, _| {}, || {}).await.map_err(|e| e.to_string())?;
+    Ok(serde_json::json!({ "available": true, "installed": true, "version": version }))
+}
+
+#[tauri::command]
 fn set_system_proxy(app: tauri::AppHandle, enabled: bool, port: u16) -> Result<(), String> {
     if enabled { snapshot_system_proxy(&app)?; }
     #[cfg(target_os = "macos")]
@@ -91,21 +99,28 @@ fn set_system_proxy(app: tauri::AppHandle, enabled: bool, port: u16) -> Result<(
             .filter(|line| !line.is_empty() && !line.starts_with('*'))
             .map(String::from)
             .collect::<Vec<_>>();
-        let service = services.iter().find(|name| *name == "Wi-Fi").or_else(|| services.iter().find(|name| *name == "Ethernet")).cloned().ok_or("未找到可用网络服务")?;
+        let selected_services = if enabled {
+            services.iter().filter(|name| *name == "Wi-Fi" || *name == "Ethernet").cloned().collect::<Vec<_>>()
+        } else {
+            services.clone()
+        };
+        if selected_services.is_empty() { return Err("未找到可用网络服务".into()); }
         let snapshot = if !enabled { std::fs::read_to_string(proxy_snapshot_path(&app)?).unwrap_or_default() } else { String::new() };
-        let section = snapshot.split("[service] ").find_map(|block| block.strip_prefix(service.as_str())).unwrap_or("");
-        for (get_flag, set_flag, state_flag) in [("-getwebproxy", "-setwebproxy", "-setwebproxystate"), ("-getsecurewebproxy", "-setsecurewebproxy", "-setsecurewebproxystate")] {
-            let original_server = section.lines().skip_while(|line| *line != get_flag).skip(1).find_map(|line| line.strip_prefix("Server: ")).unwrap_or("");
-            let original_port = section.lines().skip_while(|line| *line != get_flag).skip(1).find_map(|line| line.strip_prefix("Port: ")).unwrap_or("");
-            let original_enabled = section.lines().skip_while(|line| *line != get_flag).skip(1).any(|line| line.trim().eq_ignore_ascii_case("Enabled: Yes"));
-            let mut cmd = Command::new("networksetup");
-            let host = if enabled { "127.0.0.1" } else if original_server.is_empty() { "127.0.0.1" } else { original_server };
-            let proxy_port = if enabled { port.to_string() } else if original_port.is_empty() { "0".into() } else { original_port.into() };
-            cmd.args([set_flag, &service, host, &proxy_port]);
-            let result = cmd.output().map_err(|e| e.to_string())?;
-            if !result.status.success() { return Err(String::from_utf8_lossy(&result.stderr).trim().to_string()); }
-            let result = Command::new("networksetup").args([state_flag, &service, if enabled || original_enabled { "on" } else { "off" }]).output().map_err(|e| e.to_string())?;
-            if !result.status.success() { return Err(String::from_utf8_lossy(&result.stderr).trim().to_string()); }
+        for service in selected_services {
+            let section = snapshot.split("[service] ").find_map(|block| block.strip_prefix(service.as_str())).unwrap_or("");
+            for (get_flag, set_flag, state_flag) in [("-getwebproxy", "-setwebproxy", "-setwebproxystate"), ("-getsecurewebproxy", "-setsecurewebproxy", "-setsecurewebproxystate")] {
+                let original_server = section.lines().skip_while(|line| *line != get_flag).skip(1).find_map(|line| line.strip_prefix("Server: ")).unwrap_or("");
+                let original_port = section.lines().skip_while(|line| *line != get_flag).skip(1).find_map(|line| line.strip_prefix("Port: ")).unwrap_or("");
+                let original_enabled = section.lines().skip_while(|line| *line != get_flag).skip(1).any(|line| line.trim().eq_ignore_ascii_case("Enabled: Yes"));
+                let mut cmd = Command::new("networksetup");
+                let host = if enabled { "127.0.0.1" } else if original_server.is_empty() { "127.0.0.1" } else { original_server };
+                let proxy_port = if enabled { port.to_string() } else if original_port.is_empty() { "0".into() } else { original_port.into() };
+                cmd.args([set_flag, &service, host, &proxy_port]);
+                let result = cmd.output().map_err(|e| e.to_string())?;
+                if !result.status.success() { return Err(String::from_utf8_lossy(&result.stderr).trim().to_string()); }
+                let result = Command::new("networksetup").args([state_flag, &service, if enabled || original_enabled { "on" } else { "off" }]).output().map_err(|e| e.to_string())?;
+                if !result.status.success() { return Err(String::from_utf8_lossy(&result.stderr).trim().to_string()); }
+            }
         }
         return Ok(());
     }
@@ -116,9 +131,9 @@ fn set_system_proxy(app: tauri::AppHandle, enabled: bool, port: u16) -> Result<(
         let status = Command::new("gsettings").args(["set", "org.gnome.system.proxy", "mode", mode]).status().map_err(|e| e.to_string())?;
         if !status.success() { return Err("gsettings 设置系统代理失败".into()); }
         if enabled {
-            for key in ["host", "port"] {
+            for (schema, key) in [("org.gnome.system.proxy.http", "host"), ("org.gnome.system.proxy.http", "port"), ("org.gnome.system.proxy.https", "host"), ("org.gnome.system.proxy.https", "port"), ("org.gnome.system.proxy.ftp", "host"), ("org.gnome.system.proxy.ftp", "port")] {
                 let value = if key == "host" { "127.0.0.1".to_string() } else { port.to_string() };
-                let status = Command::new("gsettings").args(["set", "org.gnome.system.proxy.http", key, &value]).status().map_err(|e| e.to_string())?;
+                let status = Command::new("gsettings").args(["set", schema, key, &value]).status().map_err(|e| e.to_string())?;
                 if !status.success() { return Err("gsettings 设置代理地址失败".into()); }
             }
         }
@@ -243,7 +258,7 @@ pub fn run() {
             }
         }))
         .plugin(tauri_plugin_updater::Builder::new().build())
-        .invoke_handler(tauri::generate_handler![open_external_url, check_for_update, set_system_proxy, system_proxy_status])
+        .invoke_handler(tauri::generate_handler![open_external_url, check_for_update, install_update, set_system_proxy, system_proxy_status])
         .manage(Backend(Mutex::new(None)))
         .setup(|app| {
             if cfg!(debug_assertions) {
