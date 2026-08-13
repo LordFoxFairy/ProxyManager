@@ -134,9 +134,15 @@ app.post('/runtime/action', async (c) => {
   }
 });
 app.post('/runtime/rollback', async (c) => {
+  const backup = exportConfigBundle();
   const config = rollbackRuntimeConfig();
-  await reloadMihomoIfRunning();
-  return c.json({ status: getRuntimeStatus(), config });
+  try {
+    await reloadMihomoIfRunning();
+    return c.json({ status: getRuntimeStatus(), config });
+  } catch (error) {
+    try { importConfigBundle(backup); await reloadMihomoIfRunning(); } catch { /* preserve the original error */ }
+    return c.json({ error: error instanceof Error ? error.message : 'Runtime 回滚失败', status: getRuntimeStatus(), config: backup.runtime }, 409);
+  }
 });
 app.get('/runtime/config-preview', (c) => {
   const config = getRuntimeConfig();
@@ -155,7 +161,7 @@ app.post('/config/import', async (c) => {
   } catch (error) {
     // Import can succeed while the runtime rejects the generated config. Restore
     // the complete pre-import bundle so the control plane and sidecar converge.
-    try { importConfigBundle(backup); } catch { /* preserve the original error */ }
+    try { importConfigBundle(backup); await reloadMihomoIfRunning(); } catch { /* preserve the original error */ }
     return c.json({ error: error instanceof Error ? error.message : '配置导入失败' }, 400);
   }
 });
