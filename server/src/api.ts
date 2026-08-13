@@ -82,15 +82,18 @@ app.use('*', cors());
 app.get('/health', (c) => c.json({ ok: true }));
 
 app.get('/runtime', (c) => c.json({ status: getRuntimeStatus(), config: getRuntimeConfig() }));
+const reloadMihomoIfRunning = async () => {
+  if (getRuntimeStatus().kind !== 'mihomo' || !mihomo.running) return null;
+  try { await applyRuntimeAction('restart'); } catch { /* status carries the error */ }
+  return getRuntimeStatus();
+};
 app.patch('/runtime', async (c) => {
   let body: unknown = {};
   try { body = await c.req.json(); } catch { /* return current state */ }
   const patch = body && typeof body === 'object' ? body as Record<string, unknown> : {};
   if (patch.kind !== undefined) setRuntimeKind(patch.kind);
   const config = updateRuntimeConfig(patch);
-  if (getRuntimeStatus().kind === 'mihomo' && mihomo.running) {
-    try { await applyRuntimeAction('restart'); } catch { /* status endpoint exposes the failure */ }
-  }
+  await reloadMihomoIfRunning();
   return c.json({ status: getRuntimeStatus(), config });
 });
 app.post('/runtime/action', async (c) => {
@@ -105,9 +108,7 @@ app.post('/runtime/action', async (c) => {
 });
 app.post('/runtime/rollback', async (c) => {
   const config = rollbackRuntimeConfig();
-  if (getRuntimeStatus().kind === 'mihomo' && mihomo.running) {
-    try { await applyRuntimeAction('restart'); } catch { /* status endpoint exposes the failure */ }
-  }
+  await reloadMihomoIfRunning();
   return c.json({ status: getRuntimeStatus(), config });
 });
 app.get('/runtime/config-preview', (c) => {
@@ -116,18 +117,18 @@ app.get('/runtime/config-preview', (c) => {
   return c.json({ valid: errors.length === 0, errors, config: buildMihomoConfig(config) });
 });
 app.get('/providers', (c) => c.json({ providers: listProviders() }));
-app.post('/providers', async (c) => { let body: unknown = {}; try { body = await c.req.json(); } catch {} return c.json(upsertProvider(body)); });
-app.patch('/providers/:id', async (c) => { let body: unknown = {}; try { body = await c.req.json(); } catch {} return c.json(upsertProvider({ ...(body as object), id: c.req.param('id') })); });
+app.post('/providers', async (c) => { let body: unknown = {}; try { body = await c.req.json(); } catch {} const provider = upsertProvider(body); await reloadMihomoIfRunning(); return c.json(provider); });
+app.patch('/providers/:id', async (c) => { let body: unknown = {}; try { body = await c.req.json(); } catch {} const provider = upsertProvider({ ...(body as object), id: c.req.param('id') }); await reloadMihomoIfRunning(); return c.json(provider); });
 app.delete('/providers/:id', (c) => removeProvider(c.req.param('id')) ? c.json({ deleted: c.req.param('id') }) : c.json({ error: 'Provider 不存在' }, 404));
 app.post('/providers/:id/refresh', async (c) => { try { return c.json(await refreshProvider(c.req.param('id'))); } catch (error) { return c.json({ error: error instanceof Error ? error.message : 'Provider 更新失败' }, 409); } });
 app.get('/groups', (c) => c.json({ groups: listGroups() }));
-app.post('/groups', async (c) => { let body: unknown = {}; try { body = await c.req.json(); } catch {} return c.json(upsertGroup(body)); });
-app.patch('/groups/:id', async (c) => { let body: unknown = {}; try { body = await c.req.json(); } catch {} return c.json(upsertGroup({ ...(body as object), id: c.req.param('id') })); });
-app.delete('/groups/:id', (c) => removeGroup(c.req.param('id')) ? c.json({ deleted: c.req.param('id') }) : c.json({ error: '代理组不存在或不可删除' }, 409));
+app.post('/groups', async (c) => { let body: unknown = {}; try { body = await c.req.json(); } catch {} const group = upsertGroup(body); await reloadMihomoIfRunning(); return c.json(group); });
+app.patch('/groups/:id', async (c) => { let body: unknown = {}; try { body = await c.req.json(); } catch {} const group = upsertGroup({ ...(body as object), id: c.req.param('id') }); await reloadMihomoIfRunning(); return c.json(group); });
+app.delete('/groups/:id', async (c) => { const deleted = removeGroup(c.req.param('id')); if (deleted) await reloadMihomoIfRunning(); return deleted ? c.json({ deleted: c.req.param('id') }) : c.json({ error: '代理组不存在或不可删除' }, 409); });
 app.get('/rules', (c) => c.json({ rules: listRules() }));
-app.post('/rules', async (c) => { let body: unknown = {}; try { body = await c.req.json(); } catch {} return c.json(upsertRule(body)); });
-app.patch('/rules/:id', async (c) => { let body: unknown = {}; try { body = await c.req.json(); } catch {} return c.json(upsertRule({ ...(body as object), id: c.req.param('id') })); });
-app.delete('/rules/:id', (c) => removeRule(c.req.param('id')) ? c.json({ deleted: c.req.param('id') }) : c.json({ error: '规则不存在' }, 404));
+app.post('/rules', async (c) => { let body: unknown = {}; try { body = await c.req.json(); } catch {} const rule = upsertRule(body); await reloadMihomoIfRunning(); return c.json(rule); });
+app.patch('/rules/:id', async (c) => { let body: unknown = {}; try { body = await c.req.json(); } catch {} const rule = upsertRule({ ...(body as object), id: c.req.param('id') }); await reloadMihomoIfRunning(); return c.json(rule); });
+app.delete('/rules/:id', async (c) => { const deleted = removeRule(c.req.param('id')); if (deleted) await reloadMihomoIfRunning(); return deleted ? c.json({ deleted: c.req.param('id') }) : c.json({ error: '规则不存在' }, 404); });
 
 app.post('/diagnostics/browser/session', (c) => {
   const session = createBrowserDiagnosticSession();
