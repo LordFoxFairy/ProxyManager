@@ -11,6 +11,7 @@ import { GatewayPage } from './features/gateway/GatewayPage';
 import { JobMonitor } from './features/jobs/JobMonitor';
 import { ResourcesPage } from './features/resources/ResourcesPage';
 import { ProxyGroupsPage } from './features/groups/ProxyGroupsPage';
+import { RulesPage } from './features/rules/RulesPage';
 import './styles/base.css';
 import './styles/app.css';
 
@@ -100,6 +101,7 @@ function ProxyManagerApp() {
 
         {page === 'overview' && stats && <DashboardPage stats={stats} gateway={gateway} validationActive={model.validationActive} validationStageLabel={model.validationStageLabel} validationPercent={model.validationPercent} collectionActive={model.collectionActive} fullCollectionActive={model.fullCollectionActive} onRun={model.startRun} onLocked={model.announceLockedAction} onNavigate={setPage} />}
         {page === 'groups' && <ProxyGroupsPage groups={model.groups} proxies={model.proxies} providers={model.providers} onSave={model.saveProxyGroup} onPatch={model.patchProxyGroup} onRemove={model.removeProxyGroup} />}
+        {page === 'rules' && <RulesPage rules={model.rules} groups={model.groups} onSave={model.saveRoutingRule} onPatch={model.patchRoutingRule} onRemove={model.removeRoutingRule} />}
         {page === 'routing' && gateway && model.runtimeStatus && model.runtimeConfig && <GatewayPage gateway={gateway} runtimeStatus={model.runtimeStatus} runtimeConfig={model.runtimeConfig} onSaveRuntime={model.saveRuntime} onRuntimeAction={model.runRuntimeAction} copied={model.copied} routingSaving={model.gatewayRoutingSaving} routingError={model.gatewayRoutingError} profileOptions={model.gatewayProfileOptions} countryOptions={model.countryOptions} onCopy={model.copy} onSaveRouting={model.saveGatewayRouting} onReload={model.load} />}
         {page === 'connections' && gateway && <ConnectionsPage gateway={gateway} />}
         {page === 'resources' && <ResourcesPage view={model.resourceView} setView={model.setResourceView} pool={poolProps} providers={providerProps} providerCatalog={model.providers} onCreateProvider={async (provider) => { const value = await model.saveProvider(provider); await model.load(); return value; }} onPatchProvider={async (id, patch) => { const value = await model.patchProvider(id, patch); await model.load(); return value; }} onRefreshProvider={async (id) => { const value = await model.refreshProvider(id); await model.load(); return value; }} />}

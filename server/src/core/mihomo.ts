@@ -5,6 +5,7 @@ import { getRuntimeConfig, type RuntimeConfig } from './runtime.js';
 import { get, type Proxy } from './store.js';
 import { providerNodes } from './providers.js';
 import { listGroups } from './groups.js';
+import { listRules } from './rules.js';
 
 export interface MihomoProxy {
   name: string;
@@ -50,7 +51,7 @@ export function buildMihomoConfig(config: RuntimeConfig, controller = '127.0.0.1
     secret,
     proxies: merged,
     'proxy-groups': groups,
-    rules: ['MATCH,PROXY'],
+    rules: [...listRules().filter((rule) => rule.enabled && rule.value).map((rule) => `${rule.kind},${rule.value},${rule.target}`), 'MATCH,PROXY'],
   };
 }
 

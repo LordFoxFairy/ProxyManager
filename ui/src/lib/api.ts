@@ -176,6 +176,12 @@ export const getGroups = () => req<{ groups: ProxyGroup[] }>('/groups');
 export const saveGroup = (group: Partial<ProxyGroup>) => req<ProxyGroup>('/groups', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(group) });
 export const patchGroup = (id: string, patch: Partial<ProxyGroup>) => req<ProxyGroup>(`/groups/${encodeURIComponent(id)}`, { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify(patch) });
 export const removeGroup = (id: string) => req<{ deleted: string }>(`/groups/${encodeURIComponent(id)}`, { method: 'DELETE' });
+export type RuleKind = 'DOMAIN' | 'DOMAIN-SUFFIX' | 'DOMAIN-KEYWORD' | 'IP-CIDR' | 'PROCESS-NAME' | 'MATCH';
+export interface RoutingRule { id: string; kind: RuleKind; value: string; target: string; enabled: boolean; }
+export const getRules = () => req<{ rules: RoutingRule[] }>('/rules');
+export const saveRule = (rule: Partial<RoutingRule>) => req<RoutingRule>('/rules', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(rule) });
+export const patchRule = (id: string, patch: Partial<RoutingRule>) => req<RoutingRule>(`/rules/${encodeURIComponent(id)}`, { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify(patch) });
+export const removeRule = (id: string) => req<{ deleted: string }>(`/rules/${encodeURIComponent(id)}`, { method: 'DELETE' });
 
 export interface AutomationSettings {
   enabled: boolean;

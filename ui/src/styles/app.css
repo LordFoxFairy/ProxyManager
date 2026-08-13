@@ -164,6 +164,21 @@
 .member-picker input { width: auto; margin: 0; }
 .member-picker span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--font-mono); font-size: 10px; }
 .editor-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 18px; }
+.rules-page { display: flex; flex-direction: column; gap: 16px; }
+.rules-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 14px 16px; background: var(--bg-primary); border: 1px solid var(--border-light); border-radius: 8px; }
+.rules-toolbar strong, .rules-toolbar span { display: block; }
+.rules-toolbar span { margin-top: 4px; color: var(--text-muted); font-size: 11px; }
+.rule-table-head, .rule-row { display: grid; grid-template-columns: 38px minmax(0, 1fr) 160px 86px; align-items: center; gap: 10px; padding: 10px 14px; }
+.rule-table-head { color: var(--text-muted); border-bottom: 1px solid var(--border-light); font-size: 10px; }
+.rule-row { min-height: 54px; border-bottom: 1px solid var(--border-light); }
+.rule-row:last-child { border-bottom: 0; }
+.rule-row strong, .rule-row span { display: block; }
+.rule-row strong { font: 11px var(--font-mono); }
+.rule-row div > span { margin-top: 3px; color: var(--text-muted); font: 10px var(--font-mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rule-target { color: var(--primary); font: 11px var(--font-mono); }
+.rule-actions { display: flex; gap: 4px; justify-content: flex-end; }
+.btn-icon.active { color: var(--success); }
+@media (max-width: 620px) { .rule-table-head { display: none; } .rule-row { grid-template-columns: 34px minmax(0, 1fr) 70px; } .rule-actions { grid-column: 3; } }
 
 .main.page-resources.resource-view-nodes {
   overflow: hidden;

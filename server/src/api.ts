@@ -27,6 +27,7 @@ import { applyRuntimeAction, getRuntimeConfig, getRuntimeStatus, setRuntimeKind,
 import { buildMihomoConfig, validateMihomoConfig } from './core/mihomo.js';
 import { listProviders, removeProvider, refreshProvider, upsertProvider } from './core/providers.js';
 import { listGroups, removeGroup, upsertGroup } from './core/groups.js';
+import { listRules, removeRule, upsertRule } from './core/rules.js';
 import { gatewayStats, traffic } from './core/gateway.js';
 import { picker } from './core/picker.js';
 import {
@@ -113,6 +114,10 @@ app.get('/groups', (c) => c.json({ groups: listGroups() }));
 app.post('/groups', async (c) => { let body: unknown = {}; try { body = await c.req.json(); } catch {} return c.json(upsertGroup(body)); });
 app.patch('/groups/:id', async (c) => { let body: unknown = {}; try { body = await c.req.json(); } catch {} return c.json(upsertGroup({ ...(body as object), id: c.req.param('id') })); });
 app.delete('/groups/:id', (c) => removeGroup(c.req.param('id')) ? c.json({ deleted: c.req.param('id') }) : c.json({ error: '代理组不存在或不可删除' }, 409));
+app.get('/rules', (c) => c.json({ rules: listRules() }));
+app.post('/rules', async (c) => { let body: unknown = {}; try { body = await c.req.json(); } catch {} return c.json(upsertRule(body)); });
+app.patch('/rules/:id', async (c) => { let body: unknown = {}; try { body = await c.req.json(); } catch {} return c.json(upsertRule({ ...(body as object), id: c.req.param('id') })); });
+app.delete('/rules/:id', (c) => removeRule(c.req.param('id')) ? c.json({ deleted: c.req.param('id') }) : c.json({ error: '规则不存在' }, 404));
 
 app.post('/diagnostics/browser/session', (c) => {
   const session = createBrowserDiagnosticSession();
