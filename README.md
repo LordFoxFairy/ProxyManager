@@ -189,6 +189,22 @@ HTTPS CONNECT 隧道;socks5 约 **51%**。真实业务流量绝大多数是 HTTP
 
 ## 配置
 
+### 发布桌面安装包
+
+桌面端使用 Tauri 构建，跨平台发布由 GitHub Actions 负责。推送符合 `v*.*.*` 的 tag 后，
+`.github/workflows/release.yml` 会自动构建 macOS（Apple Silicon 与 Intel）、Windows x64
+和 Linux x64 安装包，并创建 GitHub Release 上传产物。发布前无需提交 `server/bundle`，CI
+会先编译后端和生产依赖，再将其作为 Tauri 资源打包。
+
+```bash
+git tag v0.2.0
+git push origin v0.2.0
+```
+
+首次启用前，请在仓库 Settings → Actions → General 中允许 workflow 创建 Release；生产环境
+建议将 tag 保护规则和签名证书密钥配置到 GitHub Secrets。当前工作流默认生成未签名安装包，
+macOS 用户可能需要在系统设置中允许首次打开。
+
 全部通过环境变量覆盖,见 `server/src/config.ts`:
 
 `PM_DB`、`PM_PORT`、`PM_HOST`、`PM_TIMEOUT`、`PM_CONCURRENCY`、
