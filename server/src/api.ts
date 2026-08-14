@@ -541,9 +541,11 @@ app.post('/report', async (c) => {
   return c.json({ ok: true });
 });
 
-app.delete('/proxy/:addr', (c) => {
+app.delete('/proxy/:addr', async (c) => {
   const addr = c.req.param('addr');
-  if (!store.remove(addr)) return c.json({ error: 'not found' }, 404);
+  const result = await commitConfigChange(() => store.remove(addr));
+  if (result.error) return c.json({ error: result.error instanceof Error ? result.error.message : '节点删除失败' }, 409);
+  if (!result.value) return c.json({ error: 'not found' }, 404);
   return c.json({ deleted: addr });
 });
 
