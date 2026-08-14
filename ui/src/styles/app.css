@@ -177,6 +177,8 @@
 .rule-row div > span { margin-top: 3px; color: var(--text-muted); font: 10px var(--font-mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .rule-test-result { display: flex; align-items: center; gap: 8px; margin-top: 10px; padding: 9px 11px; border: 1px solid var(--border); border-radius: 6px; color: var(--text-secondary); font-size: 12px; }
 .job-history-list { display: grid; gap: 1px; }
+.activity-filters { display: flex; align-items: center; gap: 7px; }
+.activity-filters select { min-height: 28px; padding: 0 7px; border: 1px solid var(--border); border-radius: 5px; background: var(--bg-primary); color: var(--text-secondary); font-size: 11px; }
 .job-history-row { display: grid; grid-template-columns: 72px 90px 170px 72px minmax(0, 1fr); align-items: center; gap: 10px; min-height: 38px; padding: 6px 0; border-bottom: 1px solid var(--border-subtle); font-size: 11px; }
 .job-history-row span:nth-child(n+3), .job-history-row small { color: var(--text-muted); }
 @media (max-width: 760px) { .job-history-row { grid-template-columns: 70px 1fr; gap: 4px 8px; } .job-history-row span:nth-child(n+3), .job-history-row small { grid-column: 2; } }
