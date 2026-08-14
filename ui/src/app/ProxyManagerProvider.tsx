@@ -588,7 +588,26 @@ function useProxyManagerState() {
   const removeRuleProviderState = async (id: string) => { await removeRuleProvider(id); setRuleProviders((current) => current.filter((item) => item.id !== id)); };
   const refreshRuleProviderState = async (id: string) => { const next = await refreshRuleProvider(id); setRuleProviders((current) => current.map((item) => item.id === id ? next : item)); return next; };
   const exportConfiguration = async () => { const bundle = await exportConfig(); const blob = new Blob([JSON.stringify(bundle, null, 2)], { type: 'application/json' }); const url = URL.createObjectURL(blob); const anchor = document.createElement('a'); anchor.href = url; anchor.download = `proxymanager-config-${new Date().toISOString().slice(0, 10)}.json`; anchor.click(); URL.revokeObjectURL(url); };
-  const importConfiguration = async (file: File) => { const bundle = JSON.parse(await file.text()); await importConfig(bundle); await load(); };
+  const importConfiguration = async (file: File) => {
+    const previous = await exportConfig();
+    try {
+      const bundle = JSON.parse(await file.text()) as { runtime?: RuntimeConfig };
+      const imported = await importConfig(bundle) as { runtime?: RuntimeConfig };
+      const runtime = imported.runtime ?? bundle.runtime;
+      if (runtime?.systemProxy !== undefined) {
+        try {
+          await invoke('set_system_proxy', { enabled: runtime.systemProxy, port: runtime.mixedPort });
+          setSystemProxyActual(await invoke<boolean>('system_proxy_status').catch(() => runtime.systemProxy));
+        } catch (error) {
+          await importConfig(previous);
+          throw error;
+        }
+      }
+      await load();
+    } catch (error) {
+      setControlError(error instanceof Error ? error.message : '配置导入失败');
+    }
+  };
 
   const runningSources = control?.sources.filter((source) => source.running) ?? [];
   const collectionJob = stats?.jobs.collection;
