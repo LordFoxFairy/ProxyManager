@@ -29,7 +29,7 @@ import { applyRuntimeAction, getRuntimeConfig, getRuntimeStatus, probeRuntimeSta
 import { buildMihomoConfig, mihomo, validateMihomoConfig } from './core/mihomo.js';
 import { listProviders, removeProvider, refreshProvider, upsertProvider } from './core/providers.js';
 import { listGroups, removeGroup, upsertGroup } from './core/groups.js';
-import { listRuleProviders, listRules, refreshRuleProvider, removeRule, removeRuleProvider, upsertRule, upsertRuleProvider } from './core/rules.js';
+import { listRuleProviders, listRules, refreshRuleProvider, removeRule, removeRuleProvider, testRuleMatch, upsertRule, upsertRuleProvider } from './core/rules.js';
 import { exportConfigBundle, importConfigBundle } from './core/config-bundle.js';
 import { gatewayStats, traffic } from './core/gateway.js';
 import { picker } from './core/picker.js';
@@ -175,6 +175,7 @@ app.post('/groups', async (c) => { let body: unknown = {}; try { body = await c.
 app.patch('/groups/:id', async (c) => { let body: unknown = {}; try { body = await c.req.json(); } catch {} const result = await commitConfigChange(() => upsertGroup({ ...(body as object), id: c.req.param('id') })); return result.error ? c.json({ error: result.error instanceof Error ? result.error.message : '代理组保存失败' }, 409) : c.json(result.value); });
 app.delete('/groups/:id', async (c) => { const result = await commitConfigChange(() => removeGroup(c.req.param('id'))); if (result.error) return c.json({ error: result.error instanceof Error ? result.error.message : '代理组删除失败' }, 409); return result.value ? c.json({ deleted: c.req.param('id') }) : c.json({ error: '代理组不存在或不可删除' }, 409); });
 app.get('/rules', (c) => c.json({ rules: listRules() }));
+app.post('/rules/test', async (c) => { let body: unknown = {}; try { body = await c.req.json(); } catch {} return c.json(testRuleMatch(body)); });
 app.post('/rules', async (c) => { let body: unknown = {}; try { body = await c.req.json(); } catch {} const result = await commitConfigChange(() => upsertRule(body)); return result.error ? c.json({ error: result.error instanceof Error ? result.error.message : '规则保存失败' }, 409) : c.json(result.value); });
 app.patch('/rules/:id', async (c) => { let body: unknown = {}; try { body = await c.req.json(); } catch {} const result = await commitConfigChange(() => upsertRule({ ...(body as object), id: c.req.param('id') })); return result.error ? c.json({ error: result.error instanceof Error ? result.error.message : '规则保存失败' }, 409) : c.json(result.value); });
 app.delete('/rules/:id', async (c) => { const result = await commitConfigChange(() => removeRule(c.req.param('id'))); if (result.error) return c.json({ error: result.error instanceof Error ? result.error.message : '规则删除失败' }, 409); return result.value ? c.json({ deleted: c.req.param('id') }) : c.json({ error: '规则不存在' }, 404); });

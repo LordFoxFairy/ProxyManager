@@ -175,6 +175,7 @@
 .rule-row strong, .rule-row span { display: block; }
 .rule-row strong { font: 11px var(--font-mono); }
 .rule-row div > span { margin-top: 3px; color: var(--text-muted); font: 10px var(--font-mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rule-test-result { display: flex; align-items: center; gap: 8px; margin-top: 10px; padding: 9px 11px; border: 1px solid var(--border); border-radius: 6px; color: var(--text-secondary); font-size: 12px; }
 .rule-target { color: var(--primary); font: 11px var(--font-mono); }
 .rule-actions { display: flex; gap: 4px; justify-content: flex-end; }
 .btn-icon.active { color: var(--success); }

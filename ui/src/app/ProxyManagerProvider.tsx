@@ -37,6 +37,7 @@ import {
   patchRule,
   removeRule,
   saveRule,
+  testRule,
   getRuleProviders,
   patchRuleProvider,
   removeRuleProvider,
@@ -577,6 +578,7 @@ function useProxyManagerState() {
   const saveRoutingRule = async (rule: Partial<RoutingRule>) => { const value = await saveRule(rule); setRules((current) => current.some((item) => item.id === value.id) ? current.map((item) => item.id === value.id ? value : item) : [...current, value]); return value; };
   const patchRoutingRule = async (id: string, patch: Partial<RoutingRule>) => { const value = await patchRule(id, patch); setRules((current) => current.map((item) => item.id === id ? value : item)); return value; };
   const removeRoutingRule = async (id: string) => { await removeRule(id); setRules((current) => current.filter((item) => item.id !== id)); };
+  const testRoutingRule = (kind: 'domain' | 'ip' | 'process', value: string) => testRule(kind, value);
   const saveRuleProviderState = async (value: Partial<RuleProvider>) => { const next = await saveRuleProvider(value); setRuleProviders((current) => current.some((item) => item.id === next.id) ? current.map((item) => item.id === next.id ? next : item) : [...current, next]); return next; };
   const patchRuleProviderState = async (id: string, value: Partial<RuleProvider>) => { const next = await patchRuleProvider(id, value); setRuleProviders((current) => current.map((item) => item.id === id ? next : item)); return next; };
   const removeRuleProviderState = async (id: string) => { await removeRuleProvider(id); setRuleProviders((current) => current.filter((item) => item.id !== id)); };
@@ -666,7 +668,7 @@ function useProxyManagerState() {
   }, [toast]);
 
   return {
-    page, setPage, resourceView, setResourceView, stats, gateway, runtimeStatus, runtimeConfig, systemProxyActual, tunActual, saveRuntime, runRuntimeAction, rollbackRuntimeConfig, exportConfiguration, importConfiguration, desktopUpdate, desktopUpdateBusy, checkDesktopUpdate, installDesktopUpdate, providers, groups, saveProxyGroup, patchProxyGroup, removeProxyGroup, rules, saveRoutingRule, patchRoutingRule, removeRoutingRule, ruleProviders, saveRuleProviderState, patchRuleProviderState, removeRuleProviderState, refreshRuleProviderState, patchProvider, refreshProvider, saveProvider, control, automationDraft, setAutomationDraft, controlSaving,
+    page, setPage, resourceView, setResourceView, stats, gateway, runtimeStatus, runtimeConfig, systemProxyActual, tunActual, saveRuntime, runRuntimeAction, rollbackRuntimeConfig, exportConfiguration, importConfiguration, desktopUpdate, desktopUpdateBusy, checkDesktopUpdate, installDesktopUpdate, providers, groups, saveProxyGroup, patchProxyGroup, removeProxyGroup, rules, saveRoutingRule, patchRoutingRule, removeRoutingRule, testRoutingRule, ruleProviders, saveRuleProviderState, patchRuleProviderState, removeRuleProviderState, refreshRuleProviderState, patchProvider, refreshProvider, saveProvider, control, automationDraft, setAutomationDraft, controlSaving,
     controlError, proxies, proxyTotal, proxyPage, setProxyPage, proxyPageSize, setProxyPageSize,
     proxyTotalPages, country, setCountry, anonymity, setAnonymity, minScore, setMinScore,
     targetFilter, setTargetFilter, proxySearch, setProxySearch, selectedProxy, setSelectedProxy,

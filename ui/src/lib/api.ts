@@ -197,6 +197,8 @@ export const getRules = () => req<{ rules: RoutingRule[] }>('/rules');
 export const saveRule = (rule: Partial<RoutingRule>) => req<RoutingRule>('/rules', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(rule) });
 export const patchRule = (id: string, patch: Partial<RoutingRule>) => req<RoutingRule>(`/rules/${encodeURIComponent(id)}`, { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify(patch) });
 export const removeRule = (id: string) => req<{ deleted: string }>(`/rules/${encodeURIComponent(id)}`, { method: 'DELETE' });
+export interface RuleTestResult { matched: boolean; rule: RoutingRule | null; target: string | null; index: number | null; }
+export const testRule = (kind: 'domain' | 'ip' | 'process', value: string) => req<RuleTestResult>('/rules/test', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ kind, value }) });
 export interface RuleProvider { id: string; name: string; url: string; behavior: 'domain' | 'classical' | 'ipcidr'; interval: number; enabled: boolean; updatedAt: number | null; lastError: string | null; }
 export const getRuleProviders = () => req<{ providers: RuleProvider[] }>('/rule-providers');
 export const saveRuleProvider = (provider: Partial<RuleProvider>) => req<RuleProvider>('/rule-providers', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(provider) });
