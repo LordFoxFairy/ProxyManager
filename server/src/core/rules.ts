@@ -1,7 +1,7 @@
 import net from 'node:net';
 import { getSetting, listSettingKeys, removeSetting, setSetting } from './store.js';
 
-export type RuleKind = 'DOMAIN' | 'DOMAIN-SUFFIX' | 'DOMAIN-KEYWORD' | 'IP-CIDR' | 'PROCESS-NAME' | 'MATCH';
+export type RuleKind = 'DOMAIN' | 'DOMAIN-SUFFIX' | 'DOMAIN-KEYWORD' | 'IP-CIDR' | 'IP-CIDR6' | 'PROCESS-NAME' | 'MATCH';
 export interface RoutingRule { id: string; kind: RuleKind; value: string; target: string; enabled: boolean; }
 export interface RuleProvider { id: string; name: string; url: string; behavior: 'domain' | 'classical' | 'ipcidr'; interval: number; enabled: boolean; updatedAt: number | null; lastError: string | null; }
 export type RuleProviderSnapshots = Record<string, string>;
@@ -12,20 +12,31 @@ function read(): RoutingRule[] { try { const raw = getSetting(KEY); return raw ?
 export function listRules() { return read(); }
 export interface RuleMatchResult { matched: boolean; rule: RoutingRule | null; target: string | null; index: number | null; }
 function ipv4(value: string): number | null { if (net.isIP(value) !== 4) return null; return value.split('.').reduce((sum, part) => (sum * 256) + Number(part), 0) >>> 0; }
+function ipv6(value: string): bigint | null {
+  if (net.isIP(value) !== 6) return null;
+  const [address] = value.split('%'); const parts = address!.split('::');
+  const left = parts[0] ? parts[0].split(':').filter(Boolean) : []; const right = parts[1] ? parts[1].split(':').filter(Boolean) : [];
+  if (parts.length > 2) return null;
+  const words = [...left, ...Array(8 - left.length - right.length).fill('0'), ...right];
+  if (words.length !== 8) return null;
+  try { return words.reduce((result, word) => (result << 16n) | BigInt(parseInt(word, 16)), 0n); } catch { return null; }
+}
 function cidrMatches(value: string, pattern: string): boolean {
   const [network, prefixText] = pattern.split('/'); const candidate = ipv4(value); const base = ipv4(network ?? ''); const prefix = Number(prefixText ?? 32);
-  if (candidate === null || base === null || !Number.isInteger(prefix) || prefix < 0 || prefix > 32) return false;
-  const mask = prefix === 0 ? 0 : (0xffffffff << (32 - prefix)) >>> 0;
-  return (candidate & mask) === (base & mask);
+  if (candidate !== null && base !== null && Number.isInteger(prefix) && prefix >= 0 && prefix <= 32) { const mask = prefix === 0 ? 0 : (0xffffffff << (32 - prefix)) >>> 0; return (candidate & mask) === (base & mask); }
+  const v6 = ipv6(value); const n6 = ipv6(network ?? ''); const prefix6 = Number(prefixText ?? 128);
+  if (v6 === null || n6 === null || !Number.isInteger(prefix6) || prefix6 < 0 || prefix6 > 128) return false;
+  const mask6 = prefix6 === 0 ? 0n : ((1n << 128n) - 1n) ^ ((1n << BigInt(128 - prefix6)) - 1n);
+  return (v6 & mask6) === (n6 & mask6);
 }
 function matches(rule: RoutingRule, input: string, kind: 'domain' | 'ip' | 'process'): boolean {
   const value = input.trim(); const expected = rule.value.trim();
-  if (!rule.enabled || (kind === 'domain' && !['DOMAIN', 'DOMAIN-SUFFIX', 'DOMAIN-KEYWORD', 'MATCH'].includes(rule.kind)) || (kind === 'ip' && !['IP-CIDR', 'MATCH'].includes(rule.kind)) || (kind === 'process' && !['PROCESS-NAME', 'MATCH'].includes(rule.kind))) return false;
+  if (!rule.enabled || (kind === 'domain' && !['DOMAIN', 'DOMAIN-SUFFIX', 'DOMAIN-KEYWORD', 'MATCH'].includes(rule.kind)) || (kind === 'ip' && !['IP-CIDR', 'IP-CIDR6', 'MATCH'].includes(rule.kind)) || (kind === 'process' && !['PROCESS-NAME', 'MATCH'].includes(rule.kind))) return false;
   if (rule.kind === 'MATCH') return true;
   if (rule.kind === 'DOMAIN') return value.toLowerCase() === expected.toLowerCase();
   if (rule.kind === 'DOMAIN-SUFFIX') { const v = value.toLowerCase().replace(/\.$/, ''); const e = expected.toLowerCase().replace(/^\./, '').replace(/\.$/, ''); return v === e || v.endsWith(`.${e}`); }
   if (rule.kind === 'DOMAIN-KEYWORD') return value.toLowerCase().includes(expected.toLowerCase());
-  if (rule.kind === 'IP-CIDR') return cidrMatches(value, expected);
+  if (rule.kind === 'IP-CIDR' || rule.kind === 'IP-CIDR6') return cidrMatches(value, expected);
   if (rule.kind === 'PROCESS-NAME') return value.toLowerCase() === expected.toLowerCase();
   return false;
 }
@@ -37,7 +48,7 @@ export function testRuleMatch(input: unknown): RuleMatchResult {
   const rules = read(); const index = rules.findIndex((rule) => matches(rule, value, kind)); const rule = index >= 0 ? rules[index]! : null;
   return { matched: Boolean(rule), rule, target: rule?.target ?? 'PROXY', index: index >= 0 ? index : null };
 }
-function normalizeRule(input: unknown, current: RoutingRule[]): RoutingRule { const row = input && typeof input === 'object' ? input as Record<string, unknown> : {}; const id = String(row.id ?? `rule-${Date.now()}`).replace(/[^a-zA-Z0-9_-]/g, '-').slice(0, 64); const old = current.find((item) => item.id === id); const kinds: RuleKind[] = ['DOMAIN', 'DOMAIN-SUFFIX', 'DOMAIN-KEYWORD', 'IP-CIDR', 'PROCESS-NAME', 'MATCH']; const kind = kinds.includes(row.kind as RuleKind) ? row.kind as RuleKind : old?.kind ?? 'DOMAIN-SUFFIX'; return { id, kind, value: String(row.value ?? old?.value ?? '').slice(0, 255), target: String(row.target ?? old?.target ?? 'PROXY').slice(0, 80), enabled: typeof row.enabled === 'boolean' ? row.enabled : old?.enabled ?? true }; }
+function normalizeRule(input: unknown, current: RoutingRule[]): RoutingRule { const row = input && typeof input === 'object' ? input as Record<string, unknown> : {}; const id = String(row.id ?? `rule-${Date.now()}`).replace(/[^a-zA-Z0-9_-]/g, '-').slice(0, 64); const old = current.find((item) => item.id === id); const kinds: RuleKind[] = ['DOMAIN', 'DOMAIN-SUFFIX', 'DOMAIN-KEYWORD', 'IP-CIDR', 'IP-CIDR6', 'PROCESS-NAME', 'MATCH']; const kind = kinds.includes(row.kind as RuleKind) ? row.kind as RuleKind : old?.kind ?? 'DOMAIN-SUFFIX'; return { id, kind, value: String(row.value ?? old?.value ?? '').slice(0, 255), target: String(row.target ?? old?.target ?? 'PROXY').slice(0, 80), enabled: typeof row.enabled === 'boolean' ? row.enabled : old?.enabled ?? true }; }
 export function replaceRules(value: unknown[]): RoutingRule[] { const current = read(); const next = value.map((item) => normalizeRule(item, current)); setSetting(KEY, JSON.stringify(next)); return next; }
 export function upsertRule(input: unknown): RoutingRule { const current = read(); const rule = normalizeRule(input, current); setSetting(KEY, JSON.stringify([...current.filter((item) => item.id !== rule.id), rule])); return rule; }
 export function removeRule(id: string) { const current = read(); const next = current.filter((item) => item.id !== id); if (next.length === current.length) return false; setSetting(KEY, JSON.stringify(next)); return true; }

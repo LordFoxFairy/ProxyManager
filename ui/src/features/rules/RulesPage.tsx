@@ -1,7 +1,7 @@
 import { CheckCircle2, Pencil, Plus, Power, RefreshCw, Save, Search, Trash2, X } from 'lucide-react';
 import { useState } from 'react';
 import type { ProxyGroup, RoutingRule, RuleKind, RuleProvider, RuleTestResult } from '../../lib/api';
-const kinds: RuleKind[] = ['DOMAIN', 'DOMAIN-SUFFIX', 'DOMAIN-KEYWORD', 'IP-CIDR', 'PROCESS-NAME', 'MATCH'];
+const kinds: RuleKind[] = ['DOMAIN', 'DOMAIN-SUFFIX', 'DOMAIN-KEYWORD', 'IP-CIDR', 'IP-CIDR6', 'PROCESS-NAME', 'MATCH'];
 export function RulesPage({ rules, groups, ruleProviders, onSave, onPatch, onRemove, onTest, onSaveProvider, onPatchProvider, onRemoveProvider, onRefreshProvider }: { rules: RoutingRule[]; groups: ProxyGroup[]; ruleProviders: RuleProvider[]; onSave: (v: Partial<RoutingRule>) => Promise<RoutingRule>; onPatch: (id: string, v: Partial<RoutingRule>) => Promise<RoutingRule>; onRemove: (id: string) => Promise<void>; onTest: (kind: 'domain' | 'ip' | 'process', value: string) => Promise<RuleTestResult>; onSaveProvider: (v: Partial<RuleProvider>) => Promise<RuleProvider>; onPatchProvider: (id: string, v: Partial<RuleProvider>) => Promise<RuleProvider>; onRemoveProvider: (id: string) => Promise<void>; onRefreshProvider: (id: string) => Promise<RuleProvider> }) {
   const [editing, setEditing] = useState<RoutingRule | null>(null); const [saving, setSaving] = useState(false);
   const [providerName, setProviderName] = useState(''); const [providerUrl, setProviderUrl] = useState(''); const [providerBehavior, setProviderBehavior] = useState<RuleProvider['behavior']>('domain');

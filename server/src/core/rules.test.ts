@@ -28,3 +28,9 @@ test('rule hit testing ignores disabled rules', () => {
   assert.equal(result.matched, false);
   assert.equal(result.target, 'PROXY');
 });
+
+test('rule hit testing matches IPv6 CIDR', () => {
+  rules.replaceRules([{ id: 'v6', kind: 'IP-CIDR6', value: '2001:db8::/32', target: 'V6', enabled: true }]);
+  assert.equal(rules.testRuleMatch({ kind: 'ip', value: '2001:db8:1::10' }).target, 'V6');
+  assert.equal(rules.testRuleMatch({ kind: 'ip', value: '2001:dead::10' }).matched, false);
+});
