@@ -104,6 +104,8 @@ export const getProxies = (q: ProxyQuery) => {
 };
 
 export const getLog = () => req<{ lines: string[] }>('/log');
+export interface JobRun { id: string; kind: 'collect' | 'validate'; status: 'running' | 'success' | 'failed'; startedAt: number; finishedAt: number | null; error: string | null; metadata: Record<string, unknown>; }
+export const getJobHistory = (limit = 50) => req<{ runs: JobRun[] }>(`/jobs/history?limit=${limit}`);
 
 export type Strategy = 'url-test' | 'round-robin' | 'random';
 

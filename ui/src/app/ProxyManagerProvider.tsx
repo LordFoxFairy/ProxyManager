@@ -17,6 +17,7 @@ import {
   getControl,
   getGateway,
   getLog,
+  getJobHistory,
   createBrowserDiagnosticSession,
   getBrowserDiagnosticStatus,
   getIpProfile,
@@ -68,6 +69,7 @@ import {
   type RoutingRule,
   type RuleProvider,
   type DesktopUpdate,
+  type JobRun,
 } from '../lib/api';
 import { invoke } from '@tauri-apps/api/core';
 import type { SelectOption } from '../components/SelectMenu';
@@ -113,6 +115,7 @@ function useProxyManagerState() {
   const [proxySearch, setProxySearch] = useState('');
   const [selectedProxy, setSelectedProxy] = useState<Proxy | null>(null);
   const [lines, setLines] = useState<string[]>([]);
+  const [jobRuns, setJobRuns] = useState<JobRun[]>([]);
   const [offline, setOffline] = useState(false);
   const [onlyHttps, setOnlyHttps] = useState(false);
   const [scheme, setScheme] = useState('');
@@ -148,7 +151,7 @@ function useProxyManagerState() {
 
   const load = useCallback(async () => {
     try {
-      const [nextStats, nextGateway, proxyResult, logResult, nextControl, nextRuntime, nextProviders, nextGroups, nextRules, nextRuleProviders] = await Promise.all([
+      const [nextStats, nextGateway, proxyResult, logResult, jobHistory, nextControl, nextRuntime, nextProviders, nextGroups, nextRules, nextRuleProviders] = await Promise.all([
         getStats(),
         getGateway(),
         getProxies({
@@ -163,12 +166,12 @@ function useProxyManagerState() {
           search: proxySearch.trim() || undefined,
         }),
         getLog(),
+        getJobHistory(),
         getControl(),
         getRuntime(),
         getProviders(),
         getGroups(),
         getRules(),
-        getRuleProviders(),
         getRuleProviders(),
       ]);
       setStats(nextStats);
@@ -185,6 +188,7 @@ function useProxyManagerState() {
       setProxyPageSize(proxyResult.pageSize);
       setProxyTotalPages(proxyResult.totalPages);
       setLines(logResult.lines);
+      setJobRuns(jobHistory.runs);
       setControl(nextControl);
       setAutomationDraft((current) => current ?? nextControl.automation);
       setOffline(false);
@@ -672,7 +676,7 @@ function useProxyManagerState() {
     controlError, proxies, proxyTotal, proxyPage, setProxyPage, proxyPageSize, setProxyPageSize,
     proxyTotalPages, country, setCountry, anonymity, setAnonymity, minScore, setMinScore,
     targetFilter, setTargetFilter, proxySearch, setProxySearch, selectedProxy, setSelectedProxy,
-    lines, offline, onlyHttps, setOnlyHttps, scheme, setScheme, copied, connectivityTargets,
+    lines, jobRuns, offline, onlyHttps, setOnlyHttps, scheme, setScheme, copied, connectivityTargets,
     connectivityResults, connectivityLoading, connectivityCheckedAt, connectivityError,
     diagnosticProxy, gatewayDiagnosticProxy, diagnosticMode, setDiagnosticMode,
     gatewayConnectivityResults, gatewayConnectivityLoading, gatewayConnectivityCheckedAt,

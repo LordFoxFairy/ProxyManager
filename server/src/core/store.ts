@@ -69,6 +69,17 @@ export function init(): Database.Database {
       value TEXT NOT NULL
     );
 
+    CREATE TABLE IF NOT EXISTS job_runs (
+      id          TEXT PRIMARY KEY,
+      kind        TEXT NOT NULL,
+      status      TEXT NOT NULL,
+      started_at  INTEGER NOT NULL,
+      finished_at INTEGER,
+      error       TEXT,
+      metadata    TEXT NOT NULL DEFAULT '{}'
+    );
+    CREATE INDEX IF NOT EXISTS idx_job_runs_started ON job_runs(started_at DESC);
+
     CREATE TABLE IF NOT EXISTS proxy_connectivity (
       proxy_addr  TEXT    NOT NULL,
       target_id   TEXT    NOT NULL,
@@ -285,6 +296,18 @@ export function removeSetting(key: string): void {
 
 export function listSettingKeys(prefix: string): string[] {
   return (conn().prepare('SELECT key FROM app_settings WHERE key LIKE ?').all(`${prefix}%`) as { key: string }[]).map((row) => row.key);
+}
+
+export interface JobRun { id: string; kind: 'collect' | 'validate'; status: 'running' | 'success' | 'failed'; startedAt: number; finishedAt: number | null; error: string | null; metadata: Record<string, unknown>; }
+export function startJobRun(kind: JobRun['kind'], metadata: Record<string, unknown> = {}): string {
+  const id = `${kind}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  conn().prepare('INSERT INTO job_runs (id, kind, status, started_at, metadata) VALUES (?, ?, ?, ?, ?)').run(id, kind, 'running', Date.now(), JSON.stringify(metadata));
+  return id;
+}
+export function finishJobRun(id: string, status: Exclude<JobRun['status'], 'running'>, error: string | null = null): void { conn().prepare('UPDATE job_runs SET status = ?, finished_at = ?, error = ? WHERE id = ?').run(status, Date.now(), error, id); }
+export function listJobRuns(limit = 50): JobRun[] {
+  const rows = conn().prepare('SELECT id, kind, status, started_at, finished_at, error, metadata FROM job_runs ORDER BY started_at DESC LIMIT ?').all(Math.max(1, Math.min(limit, 200))) as { id: string; kind: JobRun['kind']; status: JobRun['status']; started_at: number; finished_at: number | null; error: string | null; metadata: string }[];
+  return rows.map((row) => ({ id: row.id, kind: row.kind, status: row.status, startedAt: row.started_at, finishedAt: row.finished_at, error: row.error, metadata: (() => { try { return JSON.parse(row.metadata) as Record<string, unknown>; } catch { return {}; } })() }));
 }
 
 export interface ConnectivityPatch {

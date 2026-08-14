@@ -127,6 +127,16 @@ test('restores a removed proxy and its connectivity history', () => {
   store.remove(proxy.addr);
 });
 
+test('persists job run history with completion status', () => {
+  const id = store.startJobRun('validate', { limit: 25 });
+  store.finishJobRun(id, 'failed', 'fixture failure');
+  const run = store.listJobRuns(1)[0]!;
+  assert.equal(run.id, id);
+  assert.equal(run.status, 'failed');
+  assert.equal(run.metadata.limit, 25);
+  assert.equal(run.error, 'fixture failure');
+});
+
 test('automation settings persist and clamp unsafe ranges', () => {
   const settings = control.updateAutomationSettings({
     enabled: false,

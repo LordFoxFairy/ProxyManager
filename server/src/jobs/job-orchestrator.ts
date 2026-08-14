@@ -1,4 +1,5 @@
 import type { JobSnapshot, ValidationProgress } from '../contracts/jobs.js';
+import { finishJobRun, startJobRun } from '../core/store.js';
 
 interface SourceStatus {
   name: string;
@@ -85,11 +86,13 @@ export class JobOrchestrator {
     this.collectionStartedAt ??= this.now();
     this.collectionLastError = null;
 
+    const runId = startJobRun('collect', { sources: available, full: countsForSchedule });
     return (async () => {
+      let failure: string | null = null;
       try {
         await this.dependencies.collect(this.note, available);
       } catch (error) {
-        this.collectionLastError = (error as Error).message;
+        this.collectionLastError = (error as Error).message; failure = this.collectionLastError;
         this.note(`collection failed: ${this.collectionLastError}`);
       } finally {
         for (const name of available) this.collectingSources.delete(name);
@@ -103,6 +106,7 @@ export class JobOrchestrator {
           this.collectionLastCompletedAt = this.now();
         }
         this.lastRun = this.now();
+        finishJobRun(runId, failure ? 'failed' : 'success', failure);
       }
     })();
   }
@@ -121,13 +125,15 @@ export class JobOrchestrator {
       lastError: null,
     };
 
+    const runId = startJobRun('validate', { limit });
     return (async () => {
+      let failure: string | null = null;
       try {
         await this.dependencies.validate(limit, this.note, (progress) => {
           this.validation = { ...this.validation, ...progress };
         });
       } catch (error) {
-        this.validation.lastError = (error as Error).message;
+        this.validation.lastError = (error as Error).message; failure = this.validation.lastError;
         this.note(`validation failed: ${this.validation.lastError}`);
       } finally {
         this.validation.running = false;
@@ -135,6 +141,7 @@ export class JobOrchestrator {
         this.validation.lastCompletedAt = this.now();
         this.lastValidateAt = this.now();
         this.lastRun = this.now();
+        finishJobRun(runId, failure ? 'failed' : 'success', failure);
       }
     })();
   }

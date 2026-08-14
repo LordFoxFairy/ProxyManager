@@ -272,6 +272,7 @@ app.get('/stats', (c) => {
 });
 
 app.get('/log', (c) => c.json({ lines: jobs.snapshot().log }));
+app.get('/jobs/history', (c) => c.json({ runs: store.listJobRuns(Number(c.req.query('limit') ?? 50)) }));
 
 const controlPayload = () => {
   const automation = getAutomationSettings();
