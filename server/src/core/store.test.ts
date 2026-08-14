@@ -114,6 +114,19 @@ test('stores the observed exit IP with a validated proxy', () => {
   assert.equal(store.find('10.10.10.10:1080')?.exit_ip, '203.0.113.9');
 });
 
+test('restores a removed proxy and its connectivity history', () => {
+  const proxy = {
+    addr: '9.9.9.9:8080', scheme: 'http' as const, score: 80, anonymity: 'elite' as const, country: 'US', exit_ip: '8.8.8.8', https: 1,
+    latency_ms: 120, ok_count: 2, fail_count: 0, source: 'test', checked_at: Date.now(), added_at: Date.now(),
+  };
+  store.addCandidates([{ addr: proxy.addr, scheme: proxy.scheme, source: proxy.source! }]);
+  const stored = store.find(proxy.addr)!;
+  store.restoreProxy({ ...stored, ...proxy }, [{ id: 'github', name: 'GitHub', url: 'https://github.com', available: true, latencyMs: 100, statusCode: 200, checkedAt: Date.now() }]);
+  assert.equal(store.find(proxy.addr)?.exit_ip, '8.8.8.8');
+  assert.equal(store.connectivityResults(proxy.addr).length, 1);
+  store.remove(proxy.addr);
+});
+
 test('automation settings persist and clamp unsafe ranges', () => {
   const settings = control.updateAutomationSettings({
     enabled: false,

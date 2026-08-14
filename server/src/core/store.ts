@@ -244,6 +244,22 @@ export function remove(addr: string): number {
   })();
 }
 
+export function restoreProxy(proxy: Proxy, results: StoredConnectivity[] = []): void {
+  const d = conn();
+  d.transaction(() => {
+    d.prepare(`INSERT OR REPLACE INTO proxies
+      (addr, scheme, score, anonymity, country, exit_ip, https, latency_ms, ok_count, fail_count, source, checked_at, added_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
+      proxy.addr, proxy.scheme, proxy.score, proxy.anonymity, proxy.country, proxy.exit_ip,
+      proxy.https, proxy.latency_ms, proxy.ok_count, proxy.fail_count, proxy.source, proxy.checked_at, proxy.added_at,
+    );
+    const stmt = d.prepare(`INSERT OR REPLACE INTO proxy_connectivity
+      (proxy_addr, target_id, target_name, target_url, available, latency_ms, status_code, checked_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)`);
+    for (const result of results) stmt.run(proxy.addr, result.id, result.name, result.url, result.available ? 1 : 0, result.latencyMs, result.statusCode, result.checkedAt);
+  })();
+}
+
 export const find = (addr: string): Proxy | null =>
   (conn().prepare('SELECT * FROM proxies WHERE addr = ?').get(addr) as Proxy | undefined) ?? null;
 

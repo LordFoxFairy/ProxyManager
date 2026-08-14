@@ -543,9 +543,17 @@ app.post('/report', async (c) => {
 
 app.delete('/proxy/:addr', async (c) => {
   const addr = c.req.param('addr');
-  const result = await commitConfigChange(() => store.remove(addr));
-  if (result.error) return c.json({ error: result.error instanceof Error ? result.error.message : '节点删除失败' }, 409);
-  if (!result.value) return c.json({ error: 'not found' }, 404);
+  const proxy = store.find(addr);
+  if (!proxy) return c.json({ error: 'not found' }, 404);
+  const connectivity = store.connectivityResults(addr);
+  store.remove(addr);
+  try {
+    await reloadMihomoIfRunning();
+  } catch (error) {
+    store.restoreProxy(proxy, connectivity);
+    try { await reloadMihomoIfRunning(); } catch { /* preserve the original runtime error */ }
+    return c.json({ error: error instanceof Error ? error.message : '节点删除失败' }, 409);
+  }
   return c.json({ deleted: addr });
 });
 
