@@ -42,6 +42,16 @@ test('provider catalog preserves common Clash outbound protocols', () => {
   removeProvider('protocols');
 });
 
+test('provider catalog stores ISP and residential session metadata', () => {
+  const provider = upsertProvider({ id: 'isp-meta', name: 'Residential US', kind: 'residential', sessionPolicy: 'rotating', country: 'US', region: 'California', isp: 'Fixture ISP', expiresAt: 123456 });
+  assert.equal(provider.kind, 'residential');
+  assert.equal(provider.sessionPolicy, 'rotating');
+  assert.equal(provider.country, 'US');
+  assert.equal(provider.region, 'California');
+  assert.equal(provider.isp, 'Fixture ISP');
+  removeProvider('isp-meta');
+});
+
 test('provider YAML nodes preserve transport and TLS fields', async () => {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = (async () => new Response(`proxies:\n  - name: VLESS US\n    type: vless\n    server: edge.example\n    port: 443\n    uuid: UUID\n    tls: true\n    network: ws\n    ws-opts: /ignored\n`)) as typeof fetch;

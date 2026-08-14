@@ -118,6 +118,7 @@ function useProxyManagerState() {
   const [jobRuns, setJobRuns] = useState<JobRun[]>([]);
   const [offline, setOffline] = useState(false);
   const [onlyHttps, setOnlyHttps] = useState(false);
+  const [onlyExitIp, setOnlyExitIp] = useState(false);
   const [scheme, setScheme] = useState('');
   const [copied, setCopied] = useState('');
   const [customTargets, setCustomTargets] = useState<ConnectivityTarget[]>(readCustomTargets);
@@ -158,6 +159,7 @@ function useProxyManagerState() {
           page: proxyPage,
           pageSize: proxyPageSize,
           https: onlyHttps,
+          exitIp: onlyExitIp,
           scheme: scheme || undefined,
           country: country || undefined,
           anonymity: anonymity || undefined,
@@ -195,7 +197,7 @@ function useProxyManagerState() {
     } catch {
       setOffline(true);
     }
-  }, [anonymity, country, minScore, onlyHttps, proxyPage, proxyPageSize, proxySearch, scheme, targetFilter]);
+  }, [anonymity, country, minScore, onlyExitIp, onlyHttps, proxyPage, proxyPageSize, proxySearch, scheme, targetFilter]);
 
   useEffect(() => {
     void load();
@@ -325,7 +327,7 @@ function useProxyManagerState() {
     setSelectedProxy(null);
     setConnectivityResults({});
     setConnectivityCheckedAt(null);
-  }, [anonymity, country, minScore, onlyHttps, proxyPageSize, proxySearch, scheme, targetFilter]);
+  }, [anonymity, country, minScore, onlyExitIp, onlyHttps, proxyPageSize, proxySearch, scheme, targetFilter]);
 
   useEffect(() => {
     setSelectedProxy(null);
@@ -569,6 +571,7 @@ function useProxyManagerState() {
   const resetProxyFilters = () => {
     setScheme('');
     setOnlyHttps(false);
+    setOnlyExitIp(false);
     setCountry('');
     setAnonymity('');
     setMinScore(1);
@@ -695,7 +698,7 @@ function useProxyManagerState() {
     controlError, proxies, proxyTotal, proxyPage, setProxyPage, proxyPageSize, setProxyPageSize,
     proxyTotalPages, country, setCountry, anonymity, setAnonymity, minScore, setMinScore,
     targetFilter, setTargetFilter, proxySearch, setProxySearch, selectedProxy, setSelectedProxy,
-    lines, jobRuns, offline, onlyHttps, setOnlyHttps, scheme, setScheme, copied, connectivityTargets,
+    lines, jobRuns, offline, onlyHttps, setOnlyHttps, onlyExitIp, setOnlyExitIp, scheme, setScheme, copied, connectivityTargets,
     connectivityResults, connectivityLoading, connectivityCheckedAt, connectivityError,
     diagnosticProxy, gatewayDiagnosticProxy, diagnosticMode, setDiagnosticMode,
     gatewayConnectivityResults, gatewayConnectivityLoading, gatewayConnectivityCheckedAt,

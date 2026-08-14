@@ -1,18 +1,21 @@
 import { getSetting, setSetting } from './store.js';
 
-export type ProviderKind = 'subscription' | 'fixed' | 'pool';
+export type ProviderKind = 'subscription' | 'fixed' | 'pool' | 'isp' | 'residential';
 export type ProviderNodeType = 'http' | 'socks5' | 'ss' | 'vmess' | 'vless' | 'trojan' | 'hysteria2' | 'tuic' | 'wireguard';
 export interface ProviderNode { name: string; type: ProviderNodeType; server: string; port: number; [key: string]: unknown; }
-export interface Provider { id: string; name: string; kind: ProviderKind; url: string | null; enabled: boolean; nodes: ProviderNode[]; updatedAt: number | null; lastError: string | null; }
+export interface Provider { id: string; name: string; kind: ProviderKind; url: string | null; enabled: boolean; nodes: ProviderNode[]; sessionPolicy: 'rotating' | 'sticky' | 'fixed' | null; country: string | null; region: string | null; isp: string | null; expiresAt: number | null; updatedAt: number | null; lastError: string | null; }
 const KEY = 'providers.catalog';
-const read = (): Provider[] => { try { const value = JSON.parse(getSetting(KEY) ?? '[]'); return Array.isArray(value) ? value : []; } catch { return []; } };
+const read = (): Provider[] => { try { const value = JSON.parse(getSetting(KEY) ?? '[]'); if (!Array.isArray(value)) return []; return value.map((item) => normalizeProvider(item, value as Provider[])); } catch { return []; } };
 const write = (value: Provider[]) => setSetting(KEY, JSON.stringify(value));
 export function listProviders(): Provider[] { return read(); }
 function normalizeProvider(input: unknown, current: Provider[]): Provider {
   const row = input && typeof input === 'object' ? input as Record<string, unknown> : {};
   const id = String(row.id ?? `provider-${Date.now()}`).replace(/[^a-zA-Z0-9_-]/g, '-').slice(0, 64);
   const previous = current.find((item) => item.id === id);
-  return { id, name: String(row.name ?? previous?.name ?? id).slice(0, 80), kind: row.kind === 'fixed' ? 'fixed' : row.kind === 'pool' ? 'pool' : 'subscription', url: typeof row.url === 'string' && row.url.trim() ? row.url.trim().slice(0, 2048) : previous?.url ?? null, enabled: typeof row.enabled === 'boolean' ? row.enabled : previous?.enabled ?? true, nodes: Array.isArray(row.nodes) ? normalizeNodes(row.nodes) : previous?.nodes ?? [], updatedAt: typeof row.updatedAt === 'number' ? row.updatedAt : previous?.updatedAt ?? null, lastError: typeof row.lastError === 'string' ? row.lastError : previous?.lastError ?? null };
+  const kind = row.kind === 'fixed' || row.kind === 'pool' || row.kind === 'isp' || row.kind === 'residential' ? row.kind : previous?.kind ?? 'subscription';
+  const sessionPolicy = row.sessionPolicy === 'rotating' || row.sessionPolicy === 'sticky' || row.sessionPolicy === 'fixed' ? row.sessionPolicy : previous?.sessionPolicy ?? (kind === 'isp' || kind === 'residential' ? 'sticky' : null);
+  const nullableText = (value: unknown, fallback: string | null) => typeof value === 'string' && value.trim() ? value.trim().slice(0, 120) : fallback;
+  return { id, name: String(row.name ?? previous?.name ?? id).slice(0, 80), kind, url: typeof row.url === 'string' && row.url.trim() ? row.url.trim().slice(0, 2048) : previous?.url ?? null, enabled: typeof row.enabled === 'boolean' ? row.enabled : previous?.enabled ?? true, nodes: Array.isArray(row.nodes) ? normalizeNodes(row.nodes) : previous?.nodes ?? [], sessionPolicy, country: nullableText(row.country, previous?.country ?? null), region: nullableText(row.region, previous?.region ?? null), isp: nullableText(row.isp, previous?.isp ?? null), expiresAt: typeof row.expiresAt === 'number' ? row.expiresAt : previous?.expiresAt ?? null, updatedAt: typeof row.updatedAt === 'number' ? row.updatedAt : previous?.updatedAt ?? null, lastError: typeof row.lastError === 'string' ? row.lastError : previous?.lastError ?? null };
 }
 export function replaceProviders(value: unknown[]): Provider[] { const current = read(); const next = value.map((item) => normalizeProvider(item, current)); write(next); return next; }
 export function upsertProvider(input: unknown): Provider {

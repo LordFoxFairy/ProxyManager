@@ -35,6 +35,7 @@ export interface ProxyPoolPageProps {
   minScore: number;
   targetFilter: string;
   onlyHttps: boolean;
+  onlyExitIp: boolean;
   countryOptions: SelectOption[];
   targetOptions: SelectOption[];
   selectedProxy: Proxy | null;
@@ -51,6 +52,7 @@ export interface ProxyPoolPageProps {
   setMinScore: (value: number) => void;
   setTargetFilter: (value: string) => void;
   setOnlyHttps: (value: boolean) => void;
+  setOnlyExitIp: (value: boolean) => void;
   setProxyPage: Dispatch<SetStateAction<number>>;
   setProxyPageSize: (value: number) => void;
   setSelectedProxy: (value: Proxy | null) => void;
@@ -66,10 +68,10 @@ export interface ProxyPoolPageProps {
 export function ProxyPoolPage(props: ProxyPoolPageProps) {
   const {
     offline, proxies, proxyTotal, proxyPage, proxyPageSize, proxyTotalPages, proxySearch,
-    scheme, country, anonymity, minScore, targetFilter, onlyHttps, countryOptions, targetOptions,
+    scheme, country, anonymity, minScore, targetFilter, onlyHttps, onlyExitIp, countryOptions, targetOptions,
     selectedProxy, connectivityTargets, connectivityResults, connectivityLoading,
     connectivityCheckedAt, connectivityError, copied, setProxySearch, setScheme, setCountry,
-    setAnonymity, setMinScore, setTargetFilter, setOnlyHttps, setProxyPage, setProxyPageSize,
+    setAnonymity, setMinScore, setTargetFilter, setOnlyHttps, setOnlyExitIp, setProxyPage, setProxyPageSize,
     setSelectedProxy, resetFilters, runConnectivity, inspectProxy, openDiagnostics, onLocked, copy, dropProxy,
   } = props;
 
@@ -85,6 +87,7 @@ export function ProxyPoolPage(props: ProxyPoolPageProps) {
           <SelectMenu label="服务能力筛选" value={targetFilter} options={targetOptions} onChange={setTargetFilter} className="filter-target" />
           <div className="pool-filter-actions">
             <label className="filter-check"><input type="checkbox" checked={onlyHttps} onChange={(event) => setOnlyHttps(event.target.checked)} /><span><Lock size={12} /> HTTPS</span></label>
+            <label className="filter-check"><input type="checkbox" checked={onlyExitIp} onChange={(event) => setOnlyExitIp(event.target.checked)} /><span><Network size={12} /> 有出口</span></label>
             <button className="btn btn-icon" title="清除筛选" onClick={resetFilters}><Filter size={14} /></button>
             <span className="pool-total">{proxyTotal.toLocaleString()} 条</span>
           </div>

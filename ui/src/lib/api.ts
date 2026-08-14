@@ -74,6 +74,7 @@ export interface ProxyQuery {
   pageSize?: number;
   scheme?: string;
   https?: boolean;
+  exitIp?: boolean;
   country?: string;
   anonymity?: string;
   minScore?: number;
@@ -88,6 +89,7 @@ export const getProxies = (q: ProxyQuery) => {
   });
   if (q.scheme) p.set('scheme', q.scheme);
   if (q.https) p.set('https', 'true');
+  if (q.exitIp) p.set('exit_ip', 'true');
   if (q.country) p.set('country', q.country);
   if (q.anonymity) p.set('anonymity', q.anonymity);
   if (q.minScore != null) p.set('min_score', String(q.minScore));
@@ -181,7 +183,7 @@ export const rollbackRuntime = () => req<{ status: RuntimeStatus; config: Runtim
 export interface DesktopUpdate { available: boolean; currentVersion?: string; version?: string; date?: string | null; body?: string | null; }
 
 export interface ProviderNode { name: string; type: string; server: string; port: number; [key: string]: unknown; }
-export interface Provider { id: string; name: string; kind: 'subscription' | 'fixed' | 'pool'; url: string | null; enabled: boolean; nodes: ProviderNode[]; updatedAt: number | null; lastError: string | null; }
+export interface Provider { id: string; name: string; kind: 'subscription' | 'fixed' | 'pool' | 'isp' | 'residential'; url: string | null; enabled: boolean; nodes: ProviderNode[]; sessionPolicy: 'rotating' | 'sticky' | 'fixed' | null; country: string | null; region: string | null; isp: string | null; expiresAt: number | null; updatedAt: number | null; lastError: string | null; }
 export const getProviders = () => req<{ providers: Provider[] }>('/providers');
 export const saveProvider = (provider: Partial<Provider>) => req<Provider>('/providers', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(provider) });
 export const patchProvider = (id: string, patch: Partial<Provider>) => req<Provider>(`/providers/${encodeURIComponent(id)}`, { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify(patch) });

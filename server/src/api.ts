@@ -73,6 +73,7 @@ const query = (c: { req: { query: (k: string) => string | undefined } }) => ({
   country: c.req.query('country'),
   anonymity: c.req.query('anonymity'),
   https: c.req.query('https') === 'true',
+  exitIp: c.req.query('exit_ip') === 'true',
   target: c.req.query('target'),
   search: c.req.query('search')?.trim() || undefined,
 });
