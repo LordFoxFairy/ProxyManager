@@ -306,7 +306,8 @@ export function startJobRun(kind: JobRun['kind'], metadata: Record<string, unkno
 }
 export function finishJobRun(id: string, status: Exclude<JobRun['status'], 'running'>, error: string | null = null): void { conn().prepare('UPDATE job_runs SET status = ?, finished_at = ?, error = ? WHERE id = ?').run(status, Date.now(), error, id); }
 export function listJobRuns(limit = 50): JobRun[] {
-  const rows = conn().prepare('SELECT id, kind, status, started_at, finished_at, error, metadata FROM job_runs ORDER BY started_at DESC LIMIT ?').all(Math.max(1, Math.min(limit, 200))) as { id: string; kind: JobRun['kind']; status: JobRun['status']; started_at: number; finished_at: number | null; error: string | null; metadata: string }[];
+  const safeLimit = Number.isFinite(limit) ? Math.max(1, Math.min(Math.floor(limit), 200)) : 50;
+  const rows = conn().prepare('SELECT id, kind, status, started_at, finished_at, error, metadata FROM job_runs ORDER BY started_at DESC LIMIT ?').all(safeLimit) as { id: string; kind: JobRun['kind']; status: JobRun['status']; started_at: number; finished_at: number | null; error: string | null; metadata: string }[];
   return rows.map((row) => ({ id: row.id, kind: row.kind, status: row.status, startedAt: row.started_at, finishedAt: row.finished_at, error: row.error, metadata: (() => { try { return JSON.parse(row.metadata) as Record<string, unknown>; } catch { return {}; } })() }));
 }
 
